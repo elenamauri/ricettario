@@ -919,7 +919,7 @@
                 <button className="back-btn" onClick={()=>setView(view==="edit"?"detail":"home")}>← Indietro</button>
                 <h1 style={{...S.pageTitle, marginBottom:16}}>{view==="add"?"Nuova ricetta":"Modifica ricetta"}</h1>
                 <div style={S.formCard}>
-                  <div style={S.row2}>
+                  <div style={S.row2} className="row2-stack">
                     <div style={S.field}>
                       <label style={S.label}>Nome *</label>
                       <input className="inp" value={form.nome} onChange={e=>f("nome",e.target.value)} placeholder="es. Pasta al pesto"/>
