@@ -390,6 +390,29 @@
         }
       }
 
+      function showAuthErrorFromUrl() {
+        // Supabase can redirect back with hash like:
+        // #error=access_denied&error_code=otp_expired&error_description=...
+        const hash = window.location.hash || "";
+        const search = window.location.search || "";
+        const raw = (hash.startsWith("#") ? hash.slice(1) : hash) || (search.startsWith("?") ? search.slice(1) : search);
+        if (!raw) return;
+        const p = new URLSearchParams(raw);
+        const error = p.get("error") || p.get("error_code");
+        const errorCode = p.get("error_code");
+        const desc = p.get("error_description");
+        if (!error && !desc) return;
+
+        const msg = decodeURIComponent((desc || errorCode || error || "").replace(/\+/g, " "));
+        if (msg) showToast(msg, "err");
+
+        // Clean URL to avoid re-showing on refresh
+        try {
+          const cleanUrl = new URL("./", window.location.href);
+          history.replaceState({}, "", cleanUrl.href);
+        } catch {}
+      }
+
       async function handleRecoveryFromUrl() {
         if (!supabase) return;
         // Supabase recovery links typically include tokens in the URL hash.
@@ -712,6 +735,7 @@
       useEffect(() => {
         if (!supabase) return;
         refreshSession();
+        showAuthErrorFromUrl();
         handleRecoveryFromUrl();
         const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
           setSession(newSession || null);
