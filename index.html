@@ -193,7 +193,6 @@
     }
 
     function emptyForm() {
-      setCustomCategory("");
       return { nome:"", categoria:"Primo", calorie:"", proteine:"", carboidrati:"", grassi:"",
         ingredienti:"", procedimento:"", foto:"", tempoPrep:"", porzioni:"" };
     }
@@ -591,7 +590,7 @@
         const finalCategory = form.categoria === "Altro" ? customCategory.trim() : form.categoria;
         const created = {...form, categoria: finalCategory, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
         save([...recipes, created]);
-        setView("home"); setForm(emptyForm()); showToast("Ricetta salvata ✓");
+        setView("home"); setForm(emptyForm()); setCustomCategory(""); showToast("Ricetta salvata ✓");
       }
 
       function updateRecipe() {
@@ -948,7 +947,7 @@
               </div>
               <nav style={S.navLinks} className="nav-scroll">
                 <button className={`navbtn${view==="home"?" navbtn-active":""}`} onClick={()=>setView("home")}>📖 Ricette</button>
-                <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setView("add");}}>＋ Nuova</button>
+                <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setCustomCategory("");setView("add");}}>＋ Nuova</button>
                 <button className={`navbtn${view==="import"?" navbtn-active":""}`} onClick={()=>{setCsvText("");setCsvPreview([]);setView("import");}}>↑ CSV</button>
               </nav>
             </div>
@@ -1001,7 +1000,7 @@
                     <p style={S.emptyTitle}>Nessuna ricetta ancora</p>
                     <p style={S.emptySub}>Aggiungi la tua prima ricetta o importa un CSV</p>
                     <div style={S.emptyBtns}>
-                      <button className="btn-primary" onClick={()=>{setForm(emptyForm());setView("add");}}>Aggiungi ricetta</button>
+                      <button className="btn-primary" onClick={()=>{setForm(emptyForm());setCustomCategory("");setView("add");}}>Aggiungi ricetta</button>
                       <button className="btn-sec" onClick={()=>setView("import")}>Importa CSV</button>
                     </div>
                   </div>
