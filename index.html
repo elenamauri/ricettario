@@ -161,7 +161,11 @@
     const { useState, useEffect, useRef } = React;
 
     const STORAGE_KEY = "ricettario-v2";
-    const CATEGORIE = ["Colazione","Antipasto","Primo","Secondo","Contorno","Dolce","Bevanda","Altro"];
+    const CATEGORIE = [
+      "Colazione","Antipasto","Primo","Secondo","Contorno","Dolce","Bevanda","Altro",
+      "Lievitati","Panificati","Insalate","Carne","Pesce","Verdure","Legumi","Frutta",
+      "Salse","Zuppe","Sformati","Fritti","Grigliati","Veloce","Light","Vegetariano","Vegano"
+    ];
 
     // Supabase (opzionale): se non imposti URL + key, l'app resta solo locale.
     // Inserisci i valori dal tuo progetto Supabase -> Project Settings -> API.
@@ -269,6 +273,10 @@
       const [multiEdit, setMultiEdit] = useState(false);
       const [selectedIds, setSelectedIds] = useState(() => new Set());
       const [customCategory, setCustomCategory] = useState("");
+      const [recipeTags, setRecipeTags] = useState([]);
+      const [tagInput, setTagInput] = useState("");
+      const [tagSuggestions, setTagSuggestions] = useState([]);
+      const [selectedFilters, setSelectedFilters] = useState(new Set());
       const syncTimer = useRef(null);
       const fileRef = useRef();
       const csvRef = useRef();
@@ -583,14 +591,54 @@
 
       function f(key,val) { setForm(p=>({...p,[key]:val})); }
 
+      function getTagSuggestions(input) {
+        if (!input.trim()) return [];
+        const inputLower = input.toLowerCase();
+        return CATEGORIE.filter(cat => 
+          cat.toLowerCase().includes(inputLower) && 
+          !recipeTags.includes(cat)
+        ).slice(0, 5);
+      }
+
+      function addTag(tag) {
+        if (tag && !recipeTags.includes(tag)) {
+          setRecipeTags([...recipeTags, tag]);
+          setTagInput("");
+          setTagSuggestions([]);
+        }
+      }
+
+      function removeTag(tagToRemove) {
+        setRecipeTags(recipeTags.filter(tag => tag !== tagToRemove));
+      }
+
+      function handleTagInputChange(value) {
+        setTagInput(value);
+        setTagSuggestions(getTagSuggestions(value));
+      }
+
+      function toggleFilter(filter) {
+        setSelectedFilters(prev => {
+          const next = new Set(prev);
+          if (next.has(filter)) next.delete(filter);
+          else next.add(filter);
+          return next;
+        });
+      }
+
+      function clearAllFilters() {
+        setSelectedFilters(new Set());
+      }
+
       function addRecipe() {
         if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
         if (form.categoria === "Altro" && !customCategory.trim()) { showToast("Specifica la categoria personalizzata","err"); return; }
         const now = new Date().toISOString();
         const finalCategory = form.categoria === "Altro" ? customCategory.trim() : form.categoria;
-        const created = {...form, categoria: finalCategory, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
+        const allTags = [finalCategory, ...recipeTags.filter(tag => tag !== finalCategory)];
+        const created = {...form, categoria: finalCategory, tags: allTags, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
         save([...recipes, created]);
-        setView("home"); setForm(emptyForm()); setCustomCategory(""); showToast("Ricetta salvata ✓");
+        setView("home"); setForm(emptyForm()); setCustomCategory(""); setRecipeTags([]); showToast("Ricetta salvata ✓");
       }
 
       function updateRecipe() {
@@ -598,13 +646,14 @@
         if (form.categoria === "Altro" && !customCategory.trim()) { showToast("Specifica la categoria personalizzata","err"); return; }
         const now = new Date().toISOString();
         const finalCategory = form.categoria === "Altro" ? customCategory.trim() : form.categoria;
+        const allTags = [finalCategory, ...recipeTags.filter(tag => tag !== finalCategory)];
         const updated = recipes.map(r => r.id===selected.id
-          ? {...form, categoria: finalCategory, id:r.id, clientId:r.clientId, createdAt:r.createdAt, updatedAt: now}
+          ? {...form, categoria: finalCategory, tags: allTags, id:r.id, clientId:r.clientId, createdAt:r.createdAt, updatedAt: now}
           : r
         );
         save(updated);
         setSelected(updated.find(r=>r.id===selected.id));
-        setView("detail"); showToast("Ricetta aggiornata ✓");
+        setView("detail"); setRecipeTags([]); showToast("Ricetta aggiornata ✓");
       }
 
       async function deleteRecipe(id) {
@@ -698,11 +747,14 @@
         setSelected(updated.find(r=>r.id===selected.id));
       }
 
-      const usedCats = ["Tutte",...CATEGORIE.filter(c=>recipes.some(r=>r.categoria===c))];
+      const usedCats = ["Tutte",...CATEGORIE.filter(c=>recipes.some(r=>(r.tags||[]).includes(c)))];
       const filtered = recipes.filter(r => {
         const s = search.toLowerCase();
-        return (r.nome.toLowerCase().includes(s)||(r.ingredienti||"").toLowerCase().includes(s)) &&
-          (filterCat==="Tutte"||r.categoria===filterCat);
+        const matchesSearch = (r.nome.toLowerCase().includes(s)||(r.ingredienti||"").toLowerCase().includes(s));
+        const recipeTags = r.tags || [r.categoria];
+        const matchesFilters = selectedFilters.size === 0 || 
+          Array.from(selectedFilters).every(filter => recipeTags.includes(filter));
+        return matchesSearch && matchesFilters;
       });
 
       const S = {
@@ -986,10 +1038,67 @@
                       <input className="search-input" placeholder="Cerca ricetta o ingrediente…"
                         value={search} onChange={e=>setSearch(e.target.value)}/>
                     </div>
-                    <div style={S.pills}>
-                      {usedCats.map(c=>(
-                        <button key={c} className={`pill${filterCat===c?" pill-active":""}`} onClick={()=>setFilterCat(c)}>{c}</button>
-                      ))}
+                    <div style={{marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                        <span style={{fontSize:"12px",fontWeight:"600",color:"#666"}}>Filtri:</span>
+                        {selectedFilters.size > 0 && (
+                          <button 
+                            className="btn-sec" 
+                            style={{fontSize:"11px",padding:"4px 8px"}}
+                            onClick={clearAllFilters}
+                          >
+                            Cancella tutti
+                          </button>
+                        )}
+                      </div>
+                      <div style={S.pills}>
+                        {usedCats.map(c=>(
+                          <button 
+                            key={c} 
+                            className={`pill${selectedFilters.has(c) && c!=="Tutte"?" pill-active":""}`}
+                            onClick={()=>c==="Tutte"?clearAllFilters():toggleFilter(c)}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedFilters.size > 0 && (
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                          <span style={{fontSize:"11px",color:"#999",marginRight:4}}>Attivi:</span>
+                          {Array.from(selectedFilters).map(filter => (
+                            <span
+                              key={filter}
+                              style={{
+                                background:"#7c5cbf",
+                                color:"#fff",
+                                padding:"3px 8px",
+                                borderRadius:"10px",
+                                fontSize:"10px",
+                                fontWeight:"600",
+                                display:"flex",
+                                alignItems:"center",
+                                gap:4
+                              }}
+                            >
+                              {filter}
+                              <button
+                                style={{
+                                  background:"none",
+                                  border:"none",
+                                  color:"#fff",
+                                  cursor:"pointer",
+                                  fontSize:"9px",
+                                  padding:0,
+                                  lineHeight:1
+                                }}
+                                onClick={()=>toggleFilter(filter)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1042,6 +1151,12 @@
                           <div style={S.cardChips}>
                             {r.calorie && <span style={S.chip}>🔥 {r.calorie} kcal</span>}
                             {r.tempoPrep && <span style={S.chip}>⏱ {r.tempoPrep}</span>}
+                            {(r.tags || []).slice(0, 2).map((tag, i) => (
+                              <span key={i} style={{...S.chip, background:"#f0e6ff", color:"#7c5cbf"}}>{tag}</span>
+                            ))}
+                            {(r.tags || []).length > 2 && (
+                              <span style={{...S.chip, background:"#f0e6ff", color:"#7c5cbf"}}>+{(r.tags || []).length - 2}</span>
+                            )}
                           </div>
                           {(r.proteine||r.carboidrati||r.grassi) && (
                             <div style={S.macroRow}>
@@ -1137,6 +1252,8 @@
                           const isCustomCategory = !CATEGORIE.includes(selected.categoria);
                           setForm({...selected, categoria: isCustomCategory ? "Altro" : selected.categoria});
                           setCustomCategory(isCustomCategory ? selected.categoria : "");
+                          const existingTags = (selected.tags || []).filter(tag => tag !== selected.categoria);
+                          setRecipeTags(existingTags);
                           setView("edit");
                         }}>Modifica</button>
                       <button className="btn-danger" onClick={()=>setDeleteConfirm(selected.id)}>Elimina</button>
@@ -1170,6 +1287,92 @@
                           value={customCategory}
                           onChange={e=>setCustomCategory(e.target.value)}
                         />
+                      )}
+                    </div>
+                    <div style={S.field}>
+                      <label style={S.label}>Tag aggiuntivi</label>
+                      <div style={{position:"relative"}}>
+                        <input 
+                          className="inp"
+                          placeholder="Aggiungi tag (es. Carne, Veloce, Light)..."
+                          value={tagInput}
+                          onChange={e=>handleTagInputChange(e.target.value)}
+                          onKeyDown={e=>{
+                            if(e.key==="Enter") {
+                              e.preventDefault();
+                              if(tagSuggestions.length>0) addTag(tagSuggestions[0]);
+                              else addTag(tagInput.trim());
+                            }
+                          }}
+                        />
+                        {tagSuggestions.length > 0 && (
+                          <div style={{
+                            position:"absolute",
+                            top:"100%",
+                            left:0,
+                            right:0,
+                            background:"#fff",
+                            border:"1px solid #ddd6cc",
+                            borderTop:"none",
+                            borderRadius:"0 0 8px 8px",
+                            maxHeight:"120px",
+                            overflowY:"auto",
+                            zIndex:10
+                          }}>
+                            {tagSuggestions.map((suggestion, i) => (
+                              <div
+                                key={i}
+                                style={{
+                                  padding:"8px 12px",
+                                  cursor:"pointer",
+                                  borderBottom:"1px solid #f0f0f0",
+                                  fontSize:"13px"
+                                }}
+                                onMouseDown={()=>addTag(suggestion)}
+                                onMouseEnter={e=>e.target.style.background="#f5f0eb"}
+                                onMouseLeave={e=>e.target.style.background="#fff"}
+                              >
+                                {suggestion}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {recipeTags.length > 0 && (
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                          {recipeTags.map(tag => (
+                            <span
+                              key={tag}
+                              style={{
+                                background:"#e9e2f8",
+                                color:"#7c5cbf",
+                                padding:"4px 8px",
+                                borderRadius:"12px",
+                                fontSize:"11px",
+                                fontWeight:"600",
+                                display:"flex",
+                                alignItems:"center",
+                                gap:4
+                              }}
+                            >
+                              {tag}
+                              <button
+                                style={{
+                                  background:"none",
+                                  border:"none",
+                                  color:"#7c5cbf",
+                                  cursor:"pointer",
+                                  fontSize:"10px",
+                                  padding:0,
+                                  lineHeight:1
+                                }}
+                                onClick={()=>removeTag(tag)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
