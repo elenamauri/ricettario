@@ -297,14 +297,24 @@
         if (!email) { showToast("Inserisci email", "err"); return; }
         try {
           setCloudBusy(true);
-          const emailRedirectTo = window.location.origin + window.location.pathname;
+          // For GitHub Pages and sub-path deploys, force a directory URL (ends with /)
+          const emailRedirectTo = new URL("./", window.location.href).href;
           const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo } });
-          if (error) throw error;
+          if (error) {
+            console.error("Supabase signInWithOtp error:", error);
+            showToast(error.message || "Errore invio link", "err");
+            return;
+          }
           showToast("Link inviato via email ✓");
           setAuthOpen(false);
         } catch (e) {
-          showToast("Errore invio link", "err");
-          console.error(e);
+          const msg =
+            e?.message ||
+            e?.error_description ||
+            e?.description ||
+            "Errore invio link";
+          showToast(msg, "err");
+          console.error("Magic link exception:", e);
         } finally {
           setCloudBusy(false);
         }
