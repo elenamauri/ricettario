@@ -149,8 +149,8 @@
 
     // Supabase (opzionale): se non imposti URL + key, l'app resta solo locale.
     // Inserisci i valori dal tuo progetto Supabase -> Project Settings -> API.
-    const SUPABASE_URL = "";       // es. "https://xxxx.supabase.co"
-    const SUPABASE_ANON_KEY = "";  // es. "eyJhbGciOi..."
+    const SUPABASE_URL = "https://vdeglqslhnkjjxanetwo.supabase.co";       // es. "https://xxxx.supabase.co"
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkZWdscXNsaG5ramp4YW5ldHdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTQwOTcsImV4cCI6MjA5Mzg5MDA5N30.L7A9oJ4HYzHROdniUslIAazvtcE4VfzBJ8av3DzubAQ";  // es. "eyJhbGciOi..."
 
     const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase?.createClient)
       ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
