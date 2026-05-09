@@ -51,11 +51,56 @@ Webapp installabile come app nativa su telefono e desktop.
 
 ## 💾 Dove vengono salvati i dati?
 
+### Modalità base (offline)
 I dati sono salvati nel **localStorage** del browser/app sul tuo dispositivo.
 - Persistono tra sessioni: chiudi e riapri, le ricette ci sono
 - Sono locali: non vanno su nessun server
-- Se disinstalli l'app e la reinstalli, i dati rimangono (sono nel browser)
-- Per un backup, usa la funzione "Esporta" (se aggiunta in futuro)
+
+### Modalità cloud (consigliata): Supabase + magic link
+Se configuri Supabase, le ricette vengono salvate **anche su cloud** e sono disponibili su più dispositivi (stesso account email).
+
+#### Setup rapido Supabase (gratuito)
+1. Crea un progetto su Supabase
+2. Vai su **Project Settings → API** e copia:
+   - `URL`
+   - `anon public key`
+3. Apri `index.html` e imposta:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+
+#### SQL (crea tabella + policy)
+In Supabase apri **SQL Editor** e incolla:
+
+```sql
+create table if not exists public.recipes (
+  user_id uuid not null default auth.uid(),
+  client_id text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  deleted boolean not null default false,
+  primary key (user_id, client_id)
+);
+
+alter table public.recipes enable row level security;
+
+create policy "recipes_select_own" on public.recipes
+  for select using (auth.uid() = user_id);
+
+create policy "recipes_upsert_own" on public.recipes
+  for insert with check (auth.uid() = user_id);
+
+create policy "recipes_update_own" on public.recipes
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+#### Auth: magic link
+In Supabase vai su **Authentication → Providers → Email** e abilita:
+- Email provider attivo
+- OTP / Magic link abilitato (impostazione equivalente, a seconda della UI)
+
+#### Sync
+- Dopo login: l'app fa **pull** dal cloud e unisce con il locale.
+- Ad ogni modifica: salva subito in locale e fa un **push** al cloud (con piccolo debounce).
 
 ---
 

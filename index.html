@@ -5,12 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>Ricettario</title>
 
+  <!-- Favicon -->
+  <link rel="icon" href="favicon.ico" sizes="any"/>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+
   <!-- PWA -->
   <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#ede8e2"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
   <meta name="apple-mobile-web-app-title" content="Ricettario"/>
+  <!-- Back-compat (vecchio nome icona) -->
   <link rel="apple-touch-icon" href="icon-192.png"/>
 
   <!-- Font -->
@@ -133,6 +139,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
@@ -140,13 +147,47 @@
     const STORAGE_KEY = "ricettario-v2";
     const CATEGORIE = ["Colazione","Antipasto","Primo","Secondo","Contorno","Dolce","Bevanda","Altro"];
 
+    // Supabase (opzionale): se non imposti URL + key, l'app resta solo locale.
+    // Inserisci i valori dal tuo progetto Supabase -> Project Settings -> API.
+    const SUPABASE_URL = "";       // es. "https://xxxx.supabase.co"
+    const SUPABASE_ANON_KEY = "";  // es. "eyJhbGciOi..."
+
+    const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase?.createClient)
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    function randomId() {
+      try { return crypto.randomUUID(); }
+      catch { return String(Date.now()) + "-" + Math.random().toString(16).slice(2); }
+    }
+
+    function ensureClientIds(recipes) {
+      let changed = false;
+      const normalized = recipes.map(r => {
+        if (r && !r.clientId) { changed = true; return {...r, clientId: randomId()}; }
+        return r;
+      });
+      return { normalized, changed };
+    }
+
+    function ensureUpdatedAt(recipe) {
+      const now = new Date().toISOString();
+      if (!recipe.updatedAt) return {...recipe, updatedAt: recipe.createdAt || now};
+      return recipe;
+    }
+
     function emptyForm() {
       return { nome:"", categoria:"Primo", calorie:"", proteine:"", carboidrati:"", grassi:"",
         ingredienti:"", procedimento:"", foto:"", tempoPrep:"", porzioni:"" };
     }
 
     function loadRecipes() {
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        const { normalized, changed } = ensureClientIds(raw.map(ensureUpdatedAt));
+        if (changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+        return normalized;
+      }
       catch { return []; }
     }
 
@@ -165,6 +206,7 @@
         headers.forEach((h,i) => o[h] = vals[i]||"");
         return {
           id: Date.now()+Math.random(),
+          clientId: randomId(),
           nome: o.nome||o.name||"Senza nome",
           categoria: o.categoria||o.category||"Altro",
           calorie: o.calorie||o.kcal||"",
@@ -177,6 +219,7 @@
           tempoPrep: o.tempo||o.time||"",
           porzioni: o.porzioni||o.servings||"",
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
       });
     }
@@ -197,12 +240,18 @@
       const [toast, setToast] = useState(null);
       const [deleteConfirm, setDeleteConfirm] = useState(null);
       const [newLog, setNewLog] = useState("");
+      const [session, setSession] = useState(null);
+      const [authOpen, setAuthOpen] = useState(false);
+      const [authEmail, setAuthEmail] = useState("");
+      const [cloudBusy, setCloudBusy] = useState(false);
+      const syncTimer = useRef(null);
       const fileRef = useRef();
       const csvRef = useRef();
 
       function save(updated) {
         setRecipes(updated);
         saveRecipes(updated);
+        schedulePush(updated);
       }
 
       function showToast(msg, type="ok") {
@@ -210,23 +259,158 @@
         setTimeout(()=>setToast(null), 2800);
       }
 
+      function cloudEnabled() {
+        return !!supabase;
+      }
+
+      async function refreshSession() {
+        if (!supabase) return null;
+        try {
+          const { data } = await supabase.auth.getSession();
+          setSession(data?.session || null);
+          return data?.session || null;
+        } catch {
+          setSession(null);
+          return null;
+        }
+      }
+
+      async function sendMagicLink() {
+        if (!supabase) { showToast("Cloud non configurato", "err"); return; }
+        const email = (authEmail || "").trim();
+        if (!email) { showToast("Inserisci email", "err"); return; }
+        try {
+          setCloudBusy(true);
+          const emailRedirectTo = window.location.origin + window.location.pathname;
+          const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo } });
+          if (error) throw error;
+          showToast("Link inviato via email ✓");
+          setAuthOpen(false);
+        } catch (e) {
+          showToast("Errore invio link", "err");
+          console.error(e);
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      async function logout() {
+        if (!supabase) return;
+        try {
+          setCloudBusy(true);
+          await supabase.auth.signOut();
+          setSession(null);
+          showToast("Logout ✓");
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      function mergeLocalWithCloud(local, cloudRows) {
+        const map = new Map();
+        (local || []).forEach(r => {
+          if (!r) return;
+          const rr = ensureUpdatedAt(r);
+          const key = rr.clientId || String(rr.id);
+          map.set(key, rr);
+        });
+
+        (cloudRows || []).forEach(row => {
+          const data = row?.data || {};
+          const clientId = row?.client_id || data.clientId;
+          if (!clientId) return;
+          const cloudRecipe = ensureUpdatedAt({...data, clientId, _cloudUpdatedAt: row.updated_at});
+          const existing = map.get(clientId);
+          if (!existing) { map.set(clientId, cloudRecipe); return; }
+          const a = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+          const b = new Date(cloudRecipe.updatedAt || cloudRecipe.createdAt || row.updated_at || 0).getTime();
+          if (b >= a) map.set(clientId, cloudRecipe);
+        });
+
+        return Array.from(map.values());
+      }
+
+      async function pullFromCloud() {
+        if (!supabase) return;
+        const s = session || await refreshSession();
+        if (!s?.user) return;
+        try {
+          setCloudBusy(true);
+          const { data, error } = await supabase
+            .from("recipes")
+            .select("client_id,data,updated_at,deleted")
+            .order("updated_at", { ascending: true });
+          if (error) throw error;
+          const cloudActive = (data || []).filter(r => !r.deleted);
+          const merged = mergeLocalWithCloud(recipes, cloudActive);
+          const { normalized } = ensureClientIds(merged.map(ensureUpdatedAt));
+          setRecipes(normalized);
+          saveRecipes(normalized);
+          showToast("Sincronizzato ✓");
+        } catch (e) {
+          console.error(e);
+          showToast("Sync cloud fallita", "err");
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      async function pushToCloud(dataToPush) {
+        if (!supabase) return;
+        const s = session || await refreshSession();
+        if (!s?.user) return;
+        try {
+          const payload = (dataToPush || []).map(r => {
+            const rr = ensureUpdatedAt(r);
+            return { client_id: rr.clientId, data: rr, updated_at: rr.updatedAt, deleted: false };
+          }).filter(x => x.client_id);
+          if (!payload.length) return;
+          setCloudBusy(true);
+          const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
+          if (error) throw error;
+        } catch (e) {
+          console.error(e);
+          showToast("Upload cloud fallito", "err");
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      function schedulePush(updated) {
+        if (!supabase || !session?.user) return;
+        if (syncTimer.current) clearTimeout(syncTimer.current);
+        syncTimer.current = setTimeout(() => pushToCloud(updated), 700);
+      }
+
       function f(key,val) { setForm(p=>({...p,[key]:val})); }
 
       function addRecipe() {
         if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
-        save([...recipes, {...form, id:Date.now(), createdAt:new Date().toISOString()}]);
+        const now = new Date().toISOString();
+        const created = {...form, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
+        save([...recipes, created]);
         setView("home"); setForm(emptyForm()); showToast("Ricetta salvata ✓");
       }
 
       function updateRecipe() {
         if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
-        const updated = recipes.map(r => r.id===selected.id ? {...form,id:r.id,createdAt:r.createdAt} : r);
+        const now = new Date().toISOString();
+        const updated = recipes.map(r => r.id===selected.id
+          ? {...form, id:r.id, clientId:r.clientId, createdAt:r.createdAt, updatedAt: now}
+          : r
+        );
         save(updated);
         setSelected(updated.find(r=>r.id===selected.id));
         setView("detail"); showToast("Ricetta aggiornata ✓");
       }
 
       function deleteRecipe(id) {
+        const now = new Date().toISOString();
+        const deleted = recipes.find(r=>r.id===id);
+        if (supabase && session?.user && deleted?.clientId) {
+          // Soft delete in cloud to avoid reappearing after pull
+          supabase.from("recipes").upsert([{ client_id: deleted.clientId, data: deleted, updated_at: now, deleted: true }], { onConflict: "client_id" }).catch(()=>{});
+        }
         save(recipes.filter(r=>r.id!==id));
         setDeleteConfirm(null); setView("home"); showToast("Ricetta eliminata");
       }
@@ -261,7 +445,7 @@
         if (!newLog.trim()) return;
         const entry = { id: Date.now(), testo: newLog.trim(), data: new Date().toISOString() };
         const updated = recipes.map(r => r.id===selected.id
-          ? {...r, logs: [...(r.logs||[]), entry]}
+          ? {...r, logs: [...(r.logs||[]), entry], updatedAt: new Date().toISOString()}
           : r
         );
         save(updated);
@@ -272,7 +456,7 @@
 
       function deleteLog(logId) {
         const updated = recipes.map(r => r.id===selected.id
-          ? {...r, logs: (r.logs||[]).filter(l=>l.id!==logId)}
+          ? {...r, logs: (r.logs||[]).filter(l=>l.id!==logId), updatedAt: new Date().toISOString()}
           : r
         );
         save(updated);
@@ -378,9 +562,41 @@
         modalSub: { color:"#aaa", fontSize:13, margin:"0 0 16px" },
       };
 
+      useEffect(() => {
+        if (!supabase) return;
+        refreshSession();
+        const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+          setSession(newSession || null);
+        });
+        return () => { data?.subscription?.unsubscribe?.(); };
+      }, []);
+
+      useEffect(() => {
+        if (!supabase) return;
+        if (!session?.user) return;
+        pullFromCloud();
+      }, [session?.user?.id]);
+
       return (
         <div style={S.root}>
           {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+
+          {authOpen && (
+            <div style={S.overlay} onMouseDown={(e)=>{ if(e.target===e.currentTarget) setAuthOpen(false); }}>
+              <div style={S.modal} onMouseDown={(e)=>e.stopPropagation()}>
+                <div style={S.modalIcon}>✉️</div>
+                <p style={S.modalTitle}>Accedi per sincronizzare</p>
+                <p style={S.modalSub}>Ti inviamo un link via email (magic link).</p>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <input className="inp" type="email" placeholder="tua@email.com" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/>
+                  <button className="btn-primary" onClick={sendMagicLink} disabled={cloudBusy}>
+                    {cloudBusy ? "Invio…" : "Invia link"}
+                  </button>
+                  <button className="btn-sec" onClick={()=>setAuthOpen(false)}>Chiudi</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {deleteConfirm && (
             <div style={S.overlay}>
@@ -407,6 +623,16 @@
                 <button className={`navbtn${view==="home"?" navbtn-active":""}`} onClick={()=>setView("home")}>📖 Ricette</button>
                 <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setView("add");}}>＋ Nuova</button>
                 <button className={`navbtn${view==="import"?" navbtn-active":""}`} onClick={()=>{setCsvText("");setCsvPreview([]);setView("import");}}>↑ CSV</button>
+                {cloudEnabled() && (
+                  session?.user ? (
+                    <>
+                      <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">⟲ Sync</button>
+                      <button className="navbtn" onClick={logout} disabled={cloudBusy} title="Logout">⇥ Esci</button>
+                    </>
+                  ) : (
+                    <button className="navbtn" onClick={()=>setAuthOpen(true)} title="Accedi per sincronizzare">☁︎ Accedi</button>
+                  )
+                )}
               </nav>
             </div>
           </div>
