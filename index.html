@@ -131,6 +131,22 @@
       padding-left: max(20px, env(safe-area-inset-left));
       padding-right: max(20px, env(safe-area-inset-right));
     }
+
+    /* Mobile navbar: tabs under logo + horizontal scroll */
+    .nav-scroll {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .nav-scroll::-webkit-scrollbar { display: none; }
+
+    /* Responsive grids for forms */
+    @media (max-width: 520px) {
+      .row2-stack { grid-template-columns: 1fr !important; }
+    }
   </style>
 </head>
 <body>
@@ -473,11 +489,11 @@
       const S = {
         root: { minHeight:"100vh", background:"#f5f0eb" },
         navbarWrap: { background:"#ede8e2", borderBottom:"1px solid #ddd6cc", position:"sticky", top:0, zIndex:50 },
-        navbar: { maxWidth:860, margin:"0 auto", padding:"0 20px", height:54, display:"flex", alignItems:"center", justifyContent:"space-between" },
+        navbar: { maxWidth:860, margin:"0 auto", padding:"10px 20px 8px", display:"flex", flexDirection:"column", alignItems:"flex-start", gap:10 },
         navLogo: { display:"flex", alignItems:"center", gap:7, cursor:"pointer" },
         logoMark: { color:"#7c5cbf", fontSize:16 },
         logoLabel: { fontWeight:700, fontSize:15, letterSpacing:-0.2 },
-        navLinks: { display:"flex", gap:4 },
+        navLinks: { width:"100%" },
         main: { width:"100%" },
         page: { maxWidth:860, margin:"0 auto", padding:"28px 20px 80px" },
         pageTitle: { fontSize:22, fontWeight:700, margin:"0 0 4px", letterSpacing:-0.4 },
@@ -619,7 +635,7 @@
                 <span style={S.logoMark}>✦</span>
                 <span style={S.logoLabel}>Ricettario</span>
               </div>
-              <nav style={S.navLinks}>
+              <nav style={S.navLinks} className="nav-scroll">
                 <button className={`navbtn${view==="home"?" navbtn-active":""}`} onClick={()=>setView("home")}>📖 Ricette</button>
                 <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setView("add");}}>＋ Nuova</button>
                 <button className={`navbtn${view==="import"?" navbtn-active":""}`} onClick={()=>{setCsvText("");setCsvPreview([]);setView("import");}}>↑ CSV</button>
@@ -807,7 +823,7 @@
                       </select>
                     </div>
                   </div>
-                  <div style={S.row2}>
+                  <div style={S.row2} className="row2-stack">
                     <div style={S.field}>
                       <label style={S.label}>Tempo preparazione</label>
                       <input className="inp" value={form.tempoPrep} onChange={e=>f("tempoPrep",e.target.value)} placeholder="es. 30 min"/>
