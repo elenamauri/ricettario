@@ -542,7 +542,28 @@
           if (!clientId) return;
           const cloudRecipe = ensureUpdatedAt({...data, clientId, _cloudUpdatedAt: row.updated_at});
           const existing = map.get(clientId);
-          if (!existing) { map.set(clientId, cloudRecipe); return; }
+          if (!existing) { 
+            // Only add non-deleted recipes from cloud
+            if (!cloudRecipe.deleted) {
+              map.set(clientId, cloudRecipe);
+            }
+            return; 
+          }
+          
+          // Handle deleted recipes
+          if (cloudRecipe.deleted && !existing.deleted) {
+            // Cloud says deleted but local says not - remove from local
+            map.delete(clientId);
+            return;
+          }
+          
+          if (!cloudRecipe.deleted && existing.deleted) {
+            // Cloud says not deleted but local says deleted - restore from cloud
+            map.set(clientId, cloudRecipe);
+            return;
+          }
+          
+          // Both exist and not deleted - merge by timestamp
           const a = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
           const b = new Date(cloudRecipe.updatedAt || cloudRecipe.createdAt || row.updated_at || 0).getTime();
           if (b >= a) map.set(clientId, cloudRecipe);
