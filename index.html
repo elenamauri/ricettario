@@ -43,7 +43,7 @@
     .search-input {
       width: 100%; padding: 9px 12px 9px 36px;
       border: 1.5px solid #ddd6cc; border-radius: 8px;
-      font-size: 13px; font-family: inherit; background: #fff;
+      font-size: 16px; font-family: inherit; background: #fff;
       outline: none; color: #1c1c1e; transition: border-color .13s;
     }
     .search-input:focus { border-color: #7c5cbf; box-shadow: 0 0 0 3px rgba(124,92,191,.09); }
@@ -72,7 +72,7 @@
     }
 
     .inp {
-      width: 100%; padding: 10px 12px; font-size: 14px;
+      width: 100%; padding: 10px 12px; font-size: 16px;
       border: 1.5px solid #ddd6cc; border-radius: 8px;
       font-family: inherit; background: #fff; outline: none;
       color: #1c1c1e; transition: border-color .13s, box-shadow .13s;
@@ -196,6 +196,7 @@
       const [csvPreview, setCsvPreview] = useState([]);
       const [toast, setToast] = useState(null);
       const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const [newLog, setNewLog] = useState("");
       const fileRef = useRef();
       const csvRef = useRef();
 
@@ -254,6 +255,28 @@
         save([...recipes, ...csvPreview]);
         setCsvText(""); setCsvPreview([]); setView("home");
         showToast(`${csvPreview.length} ricette importate ✓`);
+      }
+
+      function addLog() {
+        if (!newLog.trim()) return;
+        const entry = { id: Date.now(), testo: newLog.trim(), data: new Date().toISOString() };
+        const updated = recipes.map(r => r.id===selected.id
+          ? {...r, logs: [...(r.logs||[]), entry]}
+          : r
+        );
+        save(updated);
+        setSelected(updated.find(r=>r.id===selected.id));
+        setNewLog("");
+        showToast("Aggiornamento salvato ✓");
+      }
+
+      function deleteLog(logId) {
+        const updated = recipes.map(r => r.id===selected.id
+          ? {...r, logs: (r.logs||[]).filter(l=>l.id!==logId)}
+          : r
+        );
+        save(updated);
+        setSelected(updated.find(r=>r.id===selected.id));
       }
 
       const usedCats = ["Tutte",...CATEGORIE.filter(c=>recipes.some(r=>r.categoria===c))];
@@ -342,6 +365,12 @@
         codeBlock: { display:"block", background:"#1c1c1e", color:"#b89ae0", padding:"7px 11px", borderRadius:6, fontSize:11, fontFamily:"monospace", overflowX:"auto", marginTop:4 },
         previewList: { background:"#f5f0eb", borderRadius:8, padding:"10px 13px", display:"flex", flexDirection:"column", gap:6, maxHeight:200, overflowY:"auto" },
         previewItem: { fontSize:13 },
+        logSection: { marginTop:24, paddingTop:20, borderTop:"1px solid #ede8e2" },
+        logEntry: { display:"flex", gap:10, marginBottom:14, alignItems:"flex-start" },
+        logDot: { width:8, height:8, borderRadius:"50%", background:"#c4a8f0", flexShrink:0, marginTop:5 },
+        logDate: { fontSize:10, color:"#aaa", marginBottom:2 },
+        logText: { fontSize:13, color:"#333", lineHeight:1.5 },
+        logInputRow: { display:"flex", gap:8, marginTop:14, alignItems:"flex-start" },
         overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,.3)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 },
         modal: { background:"#fff", borderRadius:14, padding:"26px 22px", maxWidth:300, width:"90%", textAlign:"center", boxShadow:"0 8px 32px rgba(0,0,0,.12)" },
         modalIcon: { fontSize:26, marginBottom:9 },
@@ -495,6 +524,35 @@
                           ))}
                         </div>
                       )}
+                    </div>
+                    {/* LOG SECTION */}
+                    <div style={S.logSection}>
+                      <h2 style={S.sectionH}>Note & Aggiornamenti</h2>
+                      {(selected.logs||[]).length===0 && (
+                        <p style={{fontSize:13,color:"#bbb",marginBottom:12}}>Nessuna nota ancora. Aggiungi osservazioni, varianti o miglioramenti.</p>
+                      )}
+                      {(selected.logs||[]).slice().reverse().map(log=>(
+                        <div key={log.id} style={S.logEntry}>
+                          <span style={S.logDot}/>
+                          <div style={{flex:1}}>
+                            <div style={S.logDate}>{new Date(log.data).toLocaleDateString("it-IT",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                            <div style={S.logText}>{log.testo}</div>
+                          </div>
+                          <button onClick={()=>deleteLog(log.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#ddd",fontSize:14,padding:"0 2px",flexShrink:0}} title="Elimina nota">✕</button>
+                        </div>
+                      ))}
+                      <div style={S.logInputRow}>
+                        <textarea
+                          className="inp"
+                          rows={2}
+                          style={{flex:1,fontSize:14}}
+                          placeholder="es. Meglio con farina 00, cottura 2 min in meno…"
+                          value={newLog}
+                          onChange={e=>setNewLog(e.target.value)}
+                          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addLog();}}}
+                        />
+                        <button className="btn-primary" style={{alignSelf:"flex-end",whiteSpace:"nowrap"}} onClick={addLog}>+ Aggiungi</button>
+                      </div>
                     </div>
                     <div style={S.detailActions}>
                       <button className="btn-primary" onClick={()=>{setForm({...selected});setView("edit");}}>Modifica</button>
