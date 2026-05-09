@@ -758,7 +758,7 @@
         if (supabase && session?.user && deleted?.clientId) {
           // Soft delete in cloud to avoid reappearing after pull
           try {
-            await supabase.from("recipes").upsert([{ client_id: deleted.clientId, data: deleted, updated_at: now, deleted: true }], { onConflict: "client_id" });
+            await supabase.from("recipes").upsert([{ client_id: deleted.clientId, data: deleted, updated_at: now, deleted: true }], { onConflict: "user_id,client_id" });
           } catch (e) {
             console.error("Cloud delete failed:", e);
             showToast("Errore sincronizzazione cloud", "err");
@@ -780,7 +780,7 @@
             .map(r => ({ client_id: r.clientId, data: r, updated_at: now, deleted: true }));
           if (payload.length) {
             try {
-              await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
+              await supabase.from("recipes").upsert(payload, { onConflict: "user_id,client_id" });
             } catch (e) {
               console.error("Cloud bulk delete failed:", e);
               showToast("Errore sincronizzazione cloud", "err");
