@@ -255,6 +255,7 @@
       const [csvPreview, setCsvPreview] = useState([]);
       const [toast, setToast] = useState(null);
       const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
       const [newLog, setNewLog] = useState("");
       const [session, setSession] = useState(null);
       const [authOpen, setAuthOpen] = useState(false);
@@ -265,6 +266,8 @@
       const [resetPw1, setResetPw1] = useState("");
       const [resetPw2, setResetPw2] = useState("");
       const [cloudBusy, setCloudBusy] = useState(false);
+      const [multiEdit, setMultiEdit] = useState(false);
+      const [selectedIds, setSelectedIds] = useState(() => new Set());
       const syncTimer = useRef(null);
       const fileRef = useRef();
       const csvRef = useRef();
@@ -278,6 +281,31 @@
       function showToast(msg, type="ok") {
         setToast({msg,type});
         setTimeout(()=>setToast(null), 2800);
+      }
+
+      function toggleMultiEdit() {
+        setMultiEdit(on => {
+          const next = !on;
+          if (!next) setSelectedIds(new Set());
+          return next;
+        });
+      }
+
+      function toggleSelectRecipe(id) {
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      }
+
+      function selectAllFiltered() {
+        setSelectedIds(new Set(filtered.map(r => r.id)));
+      }
+
+      function clearSelection() {
+        setSelectedIds(new Set());
       }
 
       function cloudEnabled() {
@@ -585,6 +613,28 @@
         setDeleteConfirm(null); setView("home"); showToast("Ricetta eliminata");
       }
 
+      function deleteSelectedRecipes() {
+        const ids = Array.from(selectedIds);
+        if (!ids.length) return;
+        const now = new Date().toISOString();
+        const toDelete = recipes.filter(r => ids.includes(r.id));
+
+        if (supabase && session?.user) {
+          const payload = toDelete
+            .filter(r => r?.clientId)
+            .map(r => ({ client_id: r.clientId, data: r, updated_at: now, deleted: true }));
+          if (payload.length) {
+            supabase.from("recipes").upsert(payload, { onConflict: "client_id" }).catch(()=>{});
+          }
+        }
+
+        save(recipes.filter(r => !selectedIds.has(r.id)));
+        setBulkDeleteOpen(false);
+        setSelectedIds(new Set());
+        setMultiEdit(false);
+        showToast(`${ids.length} ${ids.length===1?"ricetta eliminata":"ricette eliminate"}`);
+      }
+
       function handlePhoto(e) {
         const file = e.target.files[0]; if (!file) return;
         const rd = new FileReader();
@@ -845,6 +895,20 @@
             </div>
           )}
 
+          {bulkDeleteOpen && (
+            <div style={S.overlay}>
+              <div style={S.modal}>
+                <div style={S.modalIcon}>🗑</div>
+                <p style={S.modalTitle}>Eliminare {selectedIds.size} {selectedIds.size===1?"ricetta":"ricette"}?</p>
+                <p style={S.modalSub}>L'azione non può essere annullata.</p>
+                <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                  <button className="btn-danger" onClick={deleteSelectedRecipes}>Elimina</button>
+                  <button className="btn-sec" onClick={()=>setBulkDeleteOpen(false)}>Annulla</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* NAVBAR */}
           <div style={S.navbarWrap}>
             <div style={S.navbar} className="navbar-inner">
@@ -875,8 +939,26 @@
             {/* HOME */}
             {view==="home" && (
               <div style={S.page}>
-                <h1 style={S.pageTitle}>Le mie ricette</h1>
+                <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12}}>
+                  <h1 style={S.pageTitle}>Le mie ricette</h1>
+                  {recipes.length>0 && (
+                    <button className="navbtn" onClick={toggleMultiEdit}>
+                      {multiEdit ? "Fine" : "Modifica"}
+                    </button>
+                  )}
+                </div>
                 <p style={S.pageSub}>{recipes.length} {recipes.length===1?"ricetta":"ricette"} salvate</p>
+
+                {multiEdit && recipes.length>0 && (
+                  <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:16}}>
+                    <button className="btn-sec" onClick={selectedIds.size===filtered.length ? clearSelection : selectAllFiltered}>
+                      {selectedIds.size===filtered.length ? "Deseleziona tutte" : "Seleziona tutte"}
+                    </button>
+                    <button className="btn-danger" onClick={()=>setBulkDeleteOpen(true)} disabled={selectedIds.size===0}>
+                      Elimina selezionate ({selectedIds.size})
+                    </button>
+                  </div>
+                )}
 
                 {recipes.length>0 && (
                   <div style={S.controls}>
@@ -911,10 +993,30 @@
                 ) : (
                   <div style={S.grid}>
                     {filtered.map(r=>(
-                      <div key={r.id} className="card" onClick={()=>{setSelected(r);setView("detail");}}>
+                      <div
+                        key={r.id}
+                        className="card"
+                        onClick={()=>{
+                          if (multiEdit) { toggleSelectRecipe(r.id); return; }
+                          setSelected(r); setView("detail");
+                        }}
+                      >
                         <div style={S.cardThumb}>
                           {r.foto ? <img src={r.foto} alt={r.nome} style={S.cardImg}/> : <div style={S.cardPlaceholder}>{getCatEmoji(r.categoria)}</div>}
                           <span style={S.cardCat}>{r.categoria}</span>
+                          {multiEdit && (
+                            <div style={{
+                              position:"absolute", top:8, right:8,
+                              width:22, height:22, borderRadius:7,
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              background: selectedIds.has(r.id) ? "#7c5cbf" : "rgba(255,255,255,.9)",
+                              border: selectedIds.has(r.id) ? "1px solid #7c5cbf" : "1px solid #ddd6cc",
+                              color: selectedIds.has(r.id) ? "#fff" : "#aaa",
+                              fontSize:12, fontWeight:800,
+                            }}>
+                              {selectedIds.has(r.id) ? "✓" : ""}
+                            </div>
+                          )}
                         </div>
                         <div style={S.cardBody}>
                           <h3 style={S.cardTitle}>{r.nome}</h3>
