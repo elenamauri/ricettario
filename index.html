@@ -277,6 +277,8 @@
       const [tagInput, setTagInput] = useState("");
       const [tagSuggestions, setTagSuggestions] = useState([]);
       const [selectedFilters, setSelectedFilters] = useState(new Set());
+      const [syncStatus, setSyncStatus] = useState("idle"); // "idle" | "syncing" | "success" | "error"
+      const [lastSyncTime, setLastSyncTime] = useState(null);
       const syncTimer = useRef(null);
       const fileRef = useRef();
       const csvRef = useRef();
@@ -543,6 +545,7 @@
         if (!s?.user) return;
         try {
           setCloudBusy(true);
+          setSyncStatus("syncing");
           const { data, error } = await supabase
             .from("recipes")
             .select("client_id,data,updated_at,deleted")
@@ -553,12 +556,16 @@
           const { normalized } = ensureClientIds(merged.map(ensureUpdatedAt));
           setRecipes(normalized);
           saveRecipes(normalized);
+          setLastSyncTime(new Date());
+          setSyncStatus("success");
           showToast("Sincronizzato ✓");
         } catch (e) {
           console.error(e);
+          setSyncStatus("error");
           showToast("Sync cloud fallita", "err");
         } finally {
           setCloudBusy(false);
+          setTimeout(() => setSyncStatus("idle"), 2000);
         }
       }
 
@@ -573,14 +580,28 @@
           }).filter(x => x.client_id);
           if (!payload.length) return;
           setCloudBusy(true);
+          setSyncStatus("syncing");
           const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
           if (error) throw error;
+          setLastSyncTime(new Date());
+          setSyncStatus("success");
         } catch (e) {
           console.error(e);
+          setSyncStatus("error");
           showToast("Upload cloud fallito", "err");
         } finally {
           setCloudBusy(false);
+          setTimeout(() => setSyncStatus("idle"), 1500);
         }
+      }
+
+      async function forceSync() {
+        if (!supabase || !session?.user) {
+          showToast("Accedi per sincronizzare", "err");
+          return;
+        }
+        await pullFromCloud();
+        await pushToCloud(recipes);
       }
 
       function schedulePush(updated) {
@@ -988,7 +1009,19 @@
                   {cloudEnabled() && (
                     session?.user ? (
                       <>
-                        <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">⟲ Sync</button>
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">
+                            {syncStatus === "syncing" ? "⏳" : "⟲"} Sync
+                          </button>
+                          <button className="navbtn" onClick={forceSync} disabled={cloudBusy} title="Forza sincronizzazione completa">
+                            🔄
+                          </button>
+                          {lastSyncTime && (
+                            <span style={{fontSize:"10px",color:"#999",marginLeft:4}}>
+                              {new Date(lastSyncTime).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}
+                            </span>
+                          )}
+                        </div>
                         <button className="navbtn" onClick={logout} disabled={cloudBusy} title="Logout">⇥</button>
                       </>
                     ) : (
