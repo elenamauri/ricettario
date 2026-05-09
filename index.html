@@ -261,6 +261,9 @@
       const [authMode, setAuthMode] = useState("magic"); // "magic" | "password"
       const [authEmail, setAuthEmail] = useState("");
       const [authPassword, setAuthPassword] = useState("");
+      const [resetOpen, setResetOpen] = useState(false);
+      const [resetPw1, setResetPw1] = useState("");
+      const [resetPw2, setResetPw2] = useState("");
       const [cloudBusy, setCloudBusy] = useState(false);
       const syncTimer = useRef(null);
       const fileRef = useRef();
@@ -382,6 +385,69 @@
           await supabase.auth.signOut();
           setSession(null);
           showToast("Logout ✓");
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      async function handleRecoveryFromUrl() {
+        if (!supabase) return;
+        // Supabase recovery links typically include tokens in the URL hash.
+        const hash = window.location.hash || "";
+        const search = window.location.search || "";
+        const isRecovery =
+          hash.includes("type=recovery") ||
+          search.includes("type=recovery");
+        if (!isRecovery) return;
+
+        try {
+          setCloudBusy(true);
+          // Prefer built-in helper when available (supabase-js v2)
+          if (typeof supabase.auth.getSessionFromUrl === "function") {
+            const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+            if (error) throw error;
+            if (data?.session) setSession(data.session);
+          } else {
+            // Fallback: parse hash params and set session manually
+            const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+            const access_token = params.get("access_token");
+            const refresh_token = params.get("refresh_token");
+            if (access_token && refresh_token) {
+              const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+              if (error) throw error;
+              if (data?.session) setSession(data.session);
+            }
+          }
+
+          setResetOpen(true);
+          showToast("Imposta una nuova password", "ok");
+        } catch (e) {
+          console.error("Recovery session error:", e);
+          showToast(e?.message || "Errore recovery", "err");
+        } finally {
+          setCloudBusy(false);
+        }
+      }
+
+      async function submitNewPassword() {
+        if (!supabase) return;
+        if (!resetPw1 || resetPw1.length < 8) { showToast("Password troppo corta (min 8)", "err"); return; }
+        if (resetPw1 !== resetPw2) { showToast("Le password non coincidono", "err"); return; }
+        try {
+          setCloudBusy(true);
+          const { error } = await supabase.auth.updateUser({ password: resetPw1 });
+          if (error) throw error;
+          setResetPw1(""); setResetPw2("");
+          setResetOpen(false);
+          // Clean tokens from URL (important on static hosting)
+          try {
+            const cleanUrl = new URL("./", window.location.href);
+            history.replaceState({}, "", cleanUrl.href);
+          } catch {}
+          showToast("Password aggiornata ✓");
+        } catch (e) {
+          console.error("Update password error:", e);
+          showToast(e?.message || "Errore aggiornamento password", "err");
         } finally {
           setCloudBusy(false);
         }
@@ -646,6 +712,7 @@
       useEffect(() => {
         if (!supabase) return;
         refreshSession();
+        handleRecoveryFromUrl();
         const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
           setSession(newSession || null);
         });
@@ -717,6 +784,24 @@
                     </div>
                   )}
                   <button className="btn-sec" onClick={()=>setAuthOpen(false)}>Chiudi</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {resetOpen && (
+            <div style={S.overlay} onMouseDown={(e)=>{ if(e.target===e.currentTarget) setResetOpen(false); }}>
+              <div style={S.modal} onMouseDown={(e)=>e.stopPropagation()}>
+                <div style={S.modalIcon}>🔁</div>
+                <p style={S.modalTitle}>Nuova password</p>
+                <p style={S.modalSub}>Scegli una nuova password per il tuo account.</p>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <input className="inp" type="password" placeholder="Nuova password (min 8)" value={resetPw1} onChange={e=>setResetPw1(e.target.value)}/>
+                  <input className="inp" type="password" placeholder="Conferma password" value={resetPw2} onChange={e=>setResetPw2(e.target.value)}/>
+                  <button className="btn-primary" onClick={submitNewPassword} disabled={cloudBusy}>
+                    {cloudBusy ? "Salvataggio…" : "Salva password"}
+                  </button>
+                  <button className="btn-sec" onClick={()=>setResetOpen(false)}>Chiudi</button>
                 </div>
               </div>
             </div>
