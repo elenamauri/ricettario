@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Ricettario</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#ede8e2"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Ricettario"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body {
+      font-family: 'DM Sans', 'Segoe UI', sans-serif;
+      background: #f5f0eb;
+      color: #1c1c1e;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    textarea { resize: vertical; font-family: inherit; }
+    select { cursor: pointer; }
+
+    .navbtn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 7px; border: none;
+      background: transparent; cursor: pointer; font-size: 13px;
+      font-family: inherit; color: #666; font-weight: 500;
+      transition: background .13s, color .13s; white-space: nowrap;
+    }
+    .navbtn:hover, .navbtn:active { background: #e0d8f5; color: #7c5cbf; }
+    .navbtn-active { background: #e0d8f5 !important; color: #7c5cbf !important; font-weight: 600; }
+
+    .search-input {
+      width: 100%; padding: 9px 12px 9px 36px;
+      border: 1.5px solid #ddd6cc; border-radius: 8px;
+      font-size: 13px; font-family: inherit; background: #fff;
+      outline: none; color: #1c1c1e; transition: border-color .13s;
+    }
+    .search-input:focus { border-color: #7c5cbf; box-shadow: 0 0 0 3px rgba(124,92,191,.09); }
+
+    .pill {
+      padding: 5px 14px; border-radius: 16px;
+      border: 1.5px solid #ddd6cc; background: #fff;
+      cursor: pointer; font-size: 12px; font-family: inherit;
+      color: #777; font-weight: 500; transition: all .13s;
+    }
+    .pill:active { background: #e0d8f5; }
+    .pill-active { background: #7c5cbf !important; border-color: #7c5cbf !important; color: #fff !important; }
+
+    .card {
+      background: #fff; border-radius: 12px; overflow: hidden;
+      cursor: pointer; border: 1.5px solid #ede8e2;
+      transition: transform .16s, box-shadow .16s, border-color .16s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(124,92,191,.1); border-color: #c4a8f0; }
+    .card:active { transform: scale(.98); }
+
+    .back-btn {
+      background: none; border: none; cursor: pointer; color: #7c5cbf;
+      font-size: 13px; font-family: inherit; font-weight: 600;
+      padding: 0; margin-bottom: 18px; display: block;
+    }
+
+    .inp {
+      width: 100%; padding: 10px 12px; font-size: 14px;
+      border: 1.5px solid #ddd6cc; border-radius: 8px;
+      font-family: inherit; background: #fff; outline: none;
+      color: #1c1c1e; transition: border-color .13s, box-shadow .13s;
+      -webkit-appearance: none;
+    }
+    .inp:focus { border-color: #7c5cbf; box-shadow: 0 0 0 3px rgba(124,92,191,.09); }
+
+    .btn-primary {
+      padding: 11px 20px; background: #7c5cbf; color: #fff;
+      border: none; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-family: inherit; font-weight: 600;
+      transition: background .13s; -webkit-appearance: none;
+    }
+    .btn-primary:hover { background: #6a4da8; }
+    .btn-primary:active { background: #5d4396; }
+
+    .btn-sec {
+      padding: 11px 20px; background: #fff; color: #555;
+      border: 1.5px solid #ddd6cc; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-family: inherit; font-weight: 500;
+      transition: border-color .13s, color .13s; -webkit-appearance: none;
+    }
+    .btn-sec:hover { border-color: #9370c8; color: #7c5cbf; }
+
+    .btn-danger {
+      padding: 11px 20px; background: #fff; color: #c0392b;
+      border: 1.5px solid #e8b4b0; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-family: inherit; font-weight: 600;
+    }
+    .btn-danger:hover { background: #fdf0ee; }
+
+    .toast {
+      position: fixed; bottom: calc(22px + env(safe-area-inset-bottom));
+      left: 50%; transform: translateX(-50%);
+      padding: 10px 20px; border-radius: 8px; font-size: 13px;
+      font-family: inherit; font-weight: 600; z-index: 300;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12); animation: fadeup .2s ease;
+      white-space: nowrap;
+    }
+    .toast-ok { background: #7c5cbf; color: #fff; }
+    .toast-err { background: #c0392b; color: #fff; }
+
+    @keyframes fadeup {
+      from { opacity:0; transform:translateX(-50%) translateY(6px); }
+      to   { opacity:1; transform:translateX(-50%) translateY(0); }
+    }
+
+    /* Safe area padding for notch/home bar */
+    .navbar-inner {
+      padding-left: max(20px, env(safe-area-inset-left));
+      padding-right: max(20px, env(safe-area-inset-right));
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const STORAGE_KEY = "ricettario-v2";
+    const CATEGORIE = ["Colazione","Antipasto","Primo","Secondo","Contorno","Dolce","Bevanda","Altro"];
+
+    function emptyForm() {
+      return { nome:"", categoria:"Primo", calorie:"", proteine:"", carboidrati:"", grassi:"",
+        ingredienti:"", procedimento:"", foto:"", tempoPrep:"", porzioni:"" };
+    }
+
+    function loadRecipes() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      catch { return []; }
+    }
+
+    function saveRecipes(data) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+      catch(e) { console.error("Storage error", e); }
+    }
+
+    function parseCSV(text) {
+      const lines = text.trim().split("\n");
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+      return lines.slice(1).map(line => {
+        const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g,""));
+        const o = {};
+        headers.forEach((h,i) => o[h] = vals[i]||"");
+        return {
+          id: Date.now()+Math.random(),
+          nome: o.nome||o.name||"Senza nome",
+          categoria: o.categoria||o.category||"Altro",
+          calorie: o.calorie||o.kcal||"",
+          proteine: o.proteine||o.protein||o.proteins||"",
+          carboidrati: o.carboidrati||o.carbs||o.carbohydrates||"",
+          grassi: o.grassi||o.fat||o.fats||"",
+          ingredienti: o.ingredienti||o.ingredients||"",
+          procedimento: o.procedimento||o.steps||o.istruzioni||"",
+          foto: o.foto||o.photo||o.image||"",
+          tempoPrep: o.tempo||o.time||"",
+          porzioni: o.porzioni||o.servings||"",
+          createdAt: new Date().toISOString(),
+        };
+      });
+    }
+
+    function getCatEmoji(cat) {
+      return {Colazione:"☕",Antipasto:"🥗",Primo:"🍝",Secondo:"🍖",Contorno:"🥦",Dolce:"🍰",Bevanda:"🥤",Altro:"🍽️"}[cat]||"🍽️";
+    }
+
+    function App() {
+      const [recipes, setRecipes] = useState(loadRecipes);
+      const [view, setView] = useState("home");
+      const [selected, setSelected] = useState(null);
+      const [search, setSearch] = useState("");
+      const [filterCat, setFilterCat] = useState("Tutte");
+      const [form, setForm] = useState(emptyForm());
+      const [csvText, setCsvText] = useState("");
+      const [csvPreview, setCsvPreview] = useState([]);
+      const [toast, setToast] = useState(null);
+      const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const fileRef = useRef();
+      const csvRef = useRef();
+
+      function save(updated) {
+        setRecipes(updated);
+        saveRecipes(updated);
+      }
+
+      function showToast(msg, type="ok") {
+        setToast({msg,type});
+        setTimeout(()=>setToast(null), 2800);
+      }
+
+      function f(key,val) { setForm(p=>({...p,[key]:val})); }
+
+      function addRecipe() {
+        if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
+        save([...recipes, {...form, id:Date.now(), createdAt:new Date().toISOString()}]);
+        setView("home"); setForm(emptyForm()); showToast("Ricetta salvata ✓");
+      }
+
+      function updateRecipe() {
+        if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
+        const updated = recipes.map(r => r.id===selected.id ? {...form,id:r.id,createdAt:r.createdAt} : r);
+        save(updated);
+        setSelected(updated.find(r=>r.id===selected.id));
+        setView("detail"); showToast("Ricetta aggiornata ✓");
+      }
+
+      function deleteRecipe(id) {
+        save(recipes.filter(r=>r.id!==id));
+        setDeleteConfirm(null); setView("home"); showToast("Ricetta eliminata");
+      }
+
+      function handlePhoto(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const rd = new FileReader();
+        rd.onload = ev => f("foto", ev.target.result);
+        rd.readAsDataURL(file);
+      }
+
+      function handleCsvFile(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const rd = new FileReader();
+        rd.onload = ev => setCsvText(ev.target.result);
+        rd.readAsText(file);
+      }
+
+      function parsePreview() {
+        const p = parseCSV(csvText);
+        if (!p.length) { showToast("CSV non valido","err"); return; }
+        setCsvPreview(p);
+      }
+
+      function importCSV() {
+        save([...recipes, ...csvPreview]);
+        setCsvText(""); setCsvPreview([]); setView("home");
+        showToast(`${csvPreview.length} ricette importate ✓`);
+      }
+
+      const usedCats = ["Tutte",...CATEGORIE.filter(c=>recipes.some(r=>r.categoria===c))];
+      const filtered = recipes.filter(r => {
+        const s = search.toLowerCase();
+        return (r.nome.toLowerCase().includes(s)||(r.ingredienti||"").toLowerCase().includes(s)) &&
+          (filterCat==="Tutte"||r.categoria===filterCat);
+      });
+
+      const S = {
+        root: { minHeight:"100vh", background:"#f5f0eb" },
+        navbarWrap: { background:"#ede8e2", borderBottom:"1px solid #ddd6cc", position:"sticky", top:0, zIndex:50 },
+        navbar: { maxWidth:860, margin:"0 auto", padding:"0 20px", height:54, display:"flex", alignItems:"center", justifyContent:"space-between" },
+        navLogo: { display:"flex", alignItems:"center", gap:7, cursor:"pointer" },
+        logoMark: { color:"#7c5cbf", fontSize:16 },
+        logoLabel: { fontWeight:700, fontSize:15, letterSpacing:-0.2 },
+        navLinks: { display:"flex", gap:4 },
+        main: { width:"100%" },
+        page: { maxWidth:860, margin:"0 auto", padding:"28px 20px 80px" },
+        pageTitle: { fontSize:22, fontWeight:700, margin:"0 0 4px", letterSpacing:-0.4 },
+        pageSub: { fontSize:13, color:"#aaa", margin:"0 0 22px" },
+        controls: { display:"flex", flexDirection:"column", gap:10, marginBottom:20 },
+        searchWrap: { position:"relative" },
+        searchIcon: { position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", color:"#bbb", fontSize:17, pointerEvents:"none" },
+        pills: { display:"flex", flexWrap:"wrap", gap:6 },
+        grid: { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12 },
+        cardThumb: { height:130, position:"relative", overflow:"hidden", borderRadius:"10px 10px 0 0" },
+        cardImg: { width:"100%", height:"100%", objectFit:"cover" },
+        cardPlaceholder: { width:"100%", height:"100%", background:"#e9e2f8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:38 },
+        cardCat: { position:"absolute", top:7, left:7, background:"rgba(124,92,191,.85)", color:"#fff", fontSize:10, padding:"2px 7px", borderRadius:9, fontWeight:600 },
+        cardBody: { padding:"10px 12px 14px" },
+        cardTitle: { margin:"0 0 6px", fontSize:13, fontWeight:700, lineHeight:1.3 },
+        cardChips: { display:"flex", gap:4, flexWrap:"wrap", marginBottom:6 },
+        chip: { background:"#ede8e2", padding:"2px 6px", borderRadius:7, fontSize:10, color:"#666" },
+        macroRow: { display:"flex", gap:7 },
+        macroMini: { display:"flex", alignItems:"center", gap:3, fontSize:10, color:"#777" },
+        macroDot: { width:5, height:5, borderRadius:"50%", display:"inline-block" },
+        emptyState: { padding:"70px 20px", textAlign:"center" },
+        emptyEmoji: { fontSize:46, marginBottom:12 },
+        emptyTitle: { fontSize:16, fontWeight:700, margin:"0 0 6px" },
+        emptySub: { color:"#aaa", fontSize:13 },
+        emptyBtns: { display:"flex", gap:10, marginTop:18, justifyContent:"center", flexWrap:"wrap" },
+        // detail
+        detailCard: { background:"#fff", borderRadius:14, overflow:"hidden", boxShadow:"0 1px 8px rgba(0,0,0,.06)" },
+        detailHero: { height:220, overflow:"hidden" },
+        detailHeroImg: { width:"100%", height:"100%", objectFit:"cover" },
+        detailHeroPlaceholder: { width:"100%", height:"100%", background:"#e9e2f8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:60 },
+        detailBody: { padding:"20px 22px 24px" },
+        detailCatBadge: { display:"inline-block", background:"#e9e2f8", color:"#7c5cbf", fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:9, marginBottom:7 },
+        detailName: { fontSize:22, fontWeight:700, margin:"0 0 14px", letterSpacing:-0.3 },
+        statsRow: { display:"flex", gap:18, marginBottom:14, flexWrap:"wrap" },
+        stat: { display:"flex", flexDirection:"column", alignItems:"center", gap:1 },
+        statIcon: { fontSize:17 },
+        statVal: { fontWeight:700, fontSize:13 },
+        statLabel: { fontSize:10, color:"#aaa" },
+        macroCard: { background:"#f5f0eb", borderRadius:10, padding:"12px 16px", marginBottom:20 },
+        macroCardTitle: { fontSize:10, fontWeight:700, color:"#7c5cbf", margin:"0 0 10px", letterSpacing:.6, textTransform:"uppercase" },
+        macroCardRow: { display:"flex", gap:24 },
+        macroCardItem: { display:"flex", flexDirection:"column", alignItems:"center", gap:4 },
+        macroBar: { width:28, height:3, borderRadius:2 },
+        macroCardVal: { fontWeight:700, fontSize:14 },
+        macroCardLabel: { fontSize:10, color:"#aaa" },
+        detailCols: { display:"grid", gridTemplateColumns:"1fr 1.5fr", gap:28, marginBottom:8 },
+        sectionH: { fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:"#7c5cbf", margin:"0 0 10px", paddingBottom:6, borderBottom:"1px solid #ede8e2" },
+        ingItem: { display:"flex", gap:8, alignItems:"flex-start", fontSize:13, marginBottom:6, lineHeight:1.5 },
+        ingBullet: { width:5, height:5, borderRadius:"50%", background:"#7c5cbf", flexShrink:0, marginTop:5 },
+        stepItem: { display:"flex", gap:9, alignItems:"flex-start", marginBottom:12 },
+        stepNum: { width:20, height:20, borderRadius:"50%", background:"#7c5cbf", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 },
+        stepText: { margin:0, fontSize:13, lineHeight:1.7, color:"#333" },
+        detailActions: { display:"flex", gap:10, paddingTop:18, borderTop:"1px solid #ede8e2", flexWrap:"wrap" },
+        // form
+        formCard: { background:"#fff", borderRadius:12, padding:"20px 20px 24px", boxShadow:"0 1px 6px rgba(0,0,0,.05)" },
+        row2: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:0 },
+        row4: { display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 },
+        field: { display:"flex", flexDirection:"column", gap:4, marginBottom:13 },
+        label: { fontSize:12, fontWeight:600, color:"#666" },
+        hintTxt: { fontWeight:400, color:"#bbb", fontSize:11 },
+        macroSection: { background:"#f5f0eb", borderRadius:10, padding:"13px 14px", marginBottom:13 },
+        macroSectionTitle: { fontSize:12, fontWeight:700, margin:"0 0 10px", color:"#7c5cbf" },
+        optionalTag: { fontWeight:400, fontSize:11, color:"#aaa" },
+        photoRow: { display:"flex", gap:11, alignItems:"flex-start" },
+        photoThumb: { width:64, height:64, objectFit:"cover", borderRadius:8, flexShrink:0 },
+        photoOr: { fontSize:11, color:"#ccc", margin:"6px 0" },
+        formActions: { display:"flex", gap:10, marginTop:6, flexWrap:"wrap" },
+        csvInfoBox: { background:"#f5f0eb", borderRadius:8, padding:"11px 13px", marginBottom:16, fontSize:13 },
+        codeBlock: { display:"block", background:"#1c1c1e", color:"#b89ae0", padding:"7px 11px", borderRadius:6, fontSize:11, fontFamily:"monospace", overflowX:"auto", marginTop:4 },
+        previewList: { background:"#f5f0eb", borderRadius:8, padding:"10px 13px", display:"flex", flexDirection:"column", gap:6, maxHeight:200, overflowY:"auto" },
+        previewItem: { fontSize:13 },
+        overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,.3)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 },
+        modal: { background:"#fff", borderRadius:14, padding:"26px 22px", maxWidth:300, width:"90%", textAlign:"center", boxShadow:"0 8px 32px rgba(0,0,0,.12)" },
+        modalIcon: { fontSize:26, marginBottom:9 },
+        modalTitle: { fontSize:15, fontWeight:700, margin:"0 0 5px" },
+        modalSub: { color:"#aaa", fontSize:13, margin:"0 0 16px" },
+      };
+
+      return (
+        <div style={S.root}>
+          {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+
+          {deleteConfirm && (
+            <div style={S.overlay}>
+              <div style={S.modal}>
+                <div style={S.modalIcon}>🗑</div>
+                <p style={S.modalTitle}>Eliminare questa ricetta?</p>
+                <p style={S.modalSub}>L'azione non può essere annullata.</p>
+                <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+                  <button className="btn-danger" onClick={()=>deleteRecipe(deleteConfirm)}>Elimina</button>
+                  <button className="btn-sec" onClick={()=>setDeleteConfirm(null)}>Annulla</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* NAVBAR */}
+          <div style={S.navbarWrap}>
+            <div style={S.navbar} className="navbar-inner">
+              <div style={S.navLogo} onClick={()=>setView("home")}>
+                <span style={S.logoMark}>✦</span>
+                <span style={S.logoLabel}>Ricettario</span>
+              </div>
+              <nav style={S.navLinks}>
+                <button className={`navbtn${view==="home"?" navbtn-active":""}`} onClick={()=>setView("home")}>📖 Ricette</button>
+                <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setView("add");}}>＋ Nuova</button>
+                <button className={`navbtn${view==="import"?" navbtn-active":""}`} onClick={()=>{setCsvText("");setCsvPreview([]);setView("import");}}>↑ CSV</button>
+              </nav>
+            </div>
+          </div>
+
+          <main style={S.main}>
+
+            {/* HOME */}
+            {view==="home" && (
+              <div style={S.page}>
+                <h1 style={S.pageTitle}>Le mie ricette</h1>
+                <p style={S.pageSub}>{recipes.length} {recipes.length===1?"ricetta":"ricette"} salvate</p>
+
+                {recipes.length>0 && (
+                  <div style={S.controls}>
+                    <div style={S.searchWrap}>
+                      <span style={S.searchIcon}>⌕</span>
+                      <input className="search-input" placeholder="Cerca ricetta o ingrediente…"
+                        value={search} onChange={e=>setSearch(e.target.value)}/>
+                    </div>
+                    <div style={S.pills}>
+                      {usedCats.map(c=>(
+                        <button key={c} className={`pill${filterCat===c?" pill-active":""}`} onClick={()=>setFilterCat(c)}>{c}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recipes.length===0 ? (
+                  <div style={S.emptyState}>
+                    <div style={S.emptyEmoji}>🥘</div>
+                    <p style={S.emptyTitle}>Nessuna ricetta ancora</p>
+                    <p style={S.emptySub}>Aggiungi la tua prima ricetta o importa un CSV</p>
+                    <div style={S.emptyBtns}>
+                      <button className="btn-primary" onClick={()=>{setForm(emptyForm());setView("add");}}>Aggiungi ricetta</button>
+                      <button className="btn-sec" onClick={()=>setView("import")}>Importa CSV</button>
+                    </div>
+                  </div>
+                ) : filtered.length===0 ? (
+                  <div style={S.emptyState}>
+                    <p style={S.emptyTitle}>Nessun risultato</p>
+                    <p style={S.emptySub}>Prova con un'altra ricerca</p>
+                  </div>
+                ) : (
+                  <div style={S.grid}>
+                    {filtered.map(r=>(
+                      <div key={r.id} className="card" onClick={()=>{setSelected(r);setView("detail");}}>
+                        <div style={S.cardThumb}>
+                          {r.foto ? <img src={r.foto} alt={r.nome} style={S.cardImg}/> : <div style={S.cardPlaceholder}>{getCatEmoji(r.categoria)}</div>}
+                          <span style={S.cardCat}>{r.categoria}</span>
+                        </div>
+                        <div style={S.cardBody}>
+                          <h3 style={S.cardTitle}>{r.nome}</h3>
+                          <div style={S.cardChips}>
+                            {r.calorie && <span style={S.chip}>🔥 {r.calorie} kcal</span>}
+                            {r.tempoPrep && <span style={S.chip}>⏱ {r.tempoPrep}</span>}
+                          </div>
+                          {(r.proteine||r.carboidrati||r.grassi) && (
+                            <div style={S.macroRow}>
+                              {r.proteine && <div style={S.macroMini}><span style={{...S.macroDot,background:"#7c5cbf"}}/>P {r.proteine}g</div>}
+                              {r.carboidrati && <div style={S.macroMini}><span style={{...S.macroDot,background:"#b89ae0"}}/>C {r.carboidrati}g</div>}
+                              {r.grassi && <div style={S.macroMini}><span style={{...S.macroDot,background:"#d4bff5"}}/>G {r.grassi}g</div>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DETAIL */}
+            {view==="detail" && selected && (
+              <div style={S.page}>
+                <button className="back-btn" onClick={()=>setView("home")}>← Tutte le ricette</button>
+                <div style={S.detailCard}>
+                  <div style={S.detailHero}>
+                    {selected.foto ? <img src={selected.foto} alt={selected.nome} style={S.detailHeroImg}/> : <div style={S.detailHeroPlaceholder}>{getCatEmoji(selected.categoria)}</div>}
+                  </div>
+                  <div style={S.detailBody}>
+                    <span style={S.detailCatBadge}>{selected.categoria}</span>
+                    <h1 style={S.detailName}>{selected.nome}</h1>
+                    <div style={S.statsRow}>
+                      {selected.tempoPrep && <div style={S.stat}><span style={S.statIcon}>⏱</span><span style={S.statVal}>{selected.tempoPrep}</span><span style={S.statLabel}>Tempo</span></div>}
+                      {selected.porzioni && <div style={S.stat}><span style={S.statIcon}>👤</span><span style={S.statVal}>{selected.porzioni}</span><span style={S.statLabel}>Porzioni</span></div>}
+                      {selected.calorie && <div style={S.stat}><span style={S.statIcon}>🔥</span><span style={S.statVal}>{selected.calorie}</span><span style={S.statLabel}>kcal</span></div>}
+                    </div>
+                    {(selected.proteine||selected.carboidrati||selected.grassi) && (
+                      <div style={S.macroCard}>
+                        <p style={S.macroCardTitle}>Macronutrienti</p>
+                        <div style={S.macroCardRow}>
+                          {selected.proteine && <div style={S.macroCardItem}><div style={{...S.macroBar,background:"#7c5cbf"}}/><span style={S.macroCardVal}>{selected.proteine}g</span><span style={S.macroCardLabel}>Proteine</span></div>}
+                          {selected.carboidrati && <div style={S.macroCardItem}><div style={{...S.macroBar,background:"#b89ae0"}}/><span style={S.macroCardVal}>{selected.carboidrati}g</span><span style={S.macroCardLabel}>Carbo</span></div>}
+                          {selected.grassi && <div style={S.macroCardItem}><div style={{...S.macroBar,background:"#d4bff5"}}/><span style={S.macroCardVal}>{selected.grassi}g</span><span style={S.macroCardLabel}>Grassi</span></div>}
+                        </div>
+                      </div>
+                    )}
+                    <div style={S.detailCols}>
+                      {selected.ingredienti && (
+                        <div>
+                          <h2 style={S.sectionH}>Ingredienti</h2>
+                          {selected.ingredienti.split(/[,;\n]/).filter(Boolean).map((ing,i)=>(
+                            <div key={i} style={S.ingItem}><span style={S.ingBullet}/><span>{ing.trim()}</span></div>
+                          ))}
+                        </div>
+                      )}
+                      {selected.procedimento && (
+                        <div>
+                          <h2 style={S.sectionH}>Procedimento</h2>
+                          {selected.procedimento.split(/\n/).filter(s=>s.trim()).map((step,i)=>(
+                            <div key={i} style={S.stepItem}>
+                              <div style={S.stepNum}>{i+1}</div>
+                              <p style={S.stepText}>{step.trim()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div style={S.detailActions}>
+                      <button className="btn-primary" onClick={()=>{setForm({...selected});setView("edit");}}>Modifica</button>
+                      <button className="btn-danger" onClick={()=>setDeleteConfirm(selected.id)}>Elimina</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ADD / EDIT */}
+            {(view==="add"||view==="edit") && (
+              <div style={S.page}>
+                <button className="back-btn" onClick={()=>setView(view==="edit"?"detail":"home")}>← Indietro</button>
+                <h1 style={{...S.pageTitle, marginBottom:16}}>{view==="add"?"Nuova ricetta":"Modifica ricetta"}</h1>
+                <div style={S.formCard}>
+                  <div style={S.row2}>
+                    <div style={S.field}>
+                      <label style={S.label}>Nome *</label>
+                      <input className="inp" value={form.nome} onChange={e=>f("nome",e.target.value)} placeholder="es. Pasta al pesto"/>
+                    </div>
+                    <div style={S.field}>
+                      <label style={S.label}>Categoria</label>
+                      <select className="inp" value={form.categoria} onChange={e=>f("categoria",e.target.value)}>
+                        {CATEGORIE.map(c=><option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={S.row2}>
+                    <div style={S.field}>
+                      <label style={S.label}>Tempo preparazione</label>
+                      <input className="inp" value={form.tempoPrep} onChange={e=>f("tempoPrep",e.target.value)} placeholder="es. 30 min"/>
+                    </div>
+                    <div style={S.field}>
+                      <label style={S.label}>Porzioni</label>
+                      <input className="inp" value={form.porzioni} onChange={e=>f("porzioni",e.target.value)} placeholder="es. 4"/>
+                    </div>
+                  </div>
+                  <div style={S.macroSection}>
+                    <p style={S.macroSectionTitle}>Calorie & Macro <span style={S.optionalTag}>per porzione — opzionali</span></p>
+                    <div style={S.row4}>
+                      <div style={S.field}>
+                        <label style={S.label}>Calorie (kcal)</label>
+                        <input className="inp" type="number" min="0" value={form.calorie} onChange={e=>f("calorie",e.target.value)} placeholder="520"/>
+                      </div>
+                      <div style={S.field}>
+                        <label style={{...S.label,color:"#7c5cbf"}}>Proteine (g)</label>
+                        <input className="inp" type="number" min="0" value={form.proteine} onChange={e=>f("proteine",e.target.value)} placeholder="28"/>
+                      </div>
+                      <div style={S.field}>
+                        <label style={{...S.label,color:"#9370c8"}}>Carboidrati (g)</label>
+                        <input className="inp" type="number" min="0" value={form.carboidrati} onChange={e=>f("carboidrati",e.target.value)} placeholder="60"/>
+                      </div>
+                      <div style={S.field}>
+                        <label style={{...S.label,color:"#b89ae0"}}>Grassi (g)</label>
+                        <input className="inp" type="number" min="0" value={form.grassi} onChange={e=>f("grassi",e.target.value)} placeholder="12"/>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={S.field}>
+                    <label style={S.label}>Ingredienti <span style={S.hintTxt}>(virgola, punto e virgola o a capo)</span></label>
+                    <textarea className="inp" rows={4} value={form.ingredienti} onChange={e=>f("ingredienti",e.target.value)} placeholder="320g spaghetti, 2 spicchi aglio…"/>
+                  </div>
+                  <div style={S.field}>
+                    <label style={S.label}>Procedimento <span style={S.hintTxt}>(un passaggio per riga)</span></label>
+                    <textarea className="inp" rows={5} value={form.procedimento} onChange={e=>f("procedimento",e.target.value)} placeholder="Porta l'acqua a ebollizione…"/>
+                  </div>
+                  <div style={S.field}>
+                    <label style={S.label}>Foto</label>
+                    <div style={S.photoRow}>
+                      {form.foto && <img src={form.foto} style={S.photoThumb} alt="preview"/>}
+                      <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                        <input className="inp" value={form.foto&&!form.foto.startsWith("data:")?form.foto:""} onChange={e=>f("foto",e.target.value)} placeholder="URL immagine…"/>
+                        <div style={S.photoOr}>oppure</div>
+                        <input type="file" accept="image/*" ref={fileRef} style={{display:"none"}} onChange={handlePhoto}/>
+                        <button className="btn-sec" style={{alignSelf:"flex-start"}} onClick={()=>fileRef.current.click()}>📷 Carica foto</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={S.formActions}>
+                    <button className="btn-primary" onClick={view==="add"?addRecipe:updateRecipe}>
+                      {view==="add"?"Salva ricetta":"Aggiorna ricetta"}
+                    </button>
+                    <button className="btn-sec" onClick={()=>setView(view==="edit"?"detail":"home")}>Annulla</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* IMPORT CSV */}
+            {view==="import" && (
+              <div style={S.page}>
+                <button className="back-btn" onClick={()=>setView("home")}>← Indietro</button>
+                <h1 style={{...S.pageTitle, marginBottom:16}}>Importa da CSV</h1>
+                <div style={S.formCard}>
+                  <div style={S.csvInfoBox}>
+                    <p style={{fontWeight:600,marginBottom:6,fontSize:12}}>Colonne riconosciute:</p>
+                    <code style={S.codeBlock}>nome, categoria, calorie, proteine, carboidrati, grassi, ingredienti, procedimento, tempo, porzioni, foto</code>
+                    <p style={{marginTop:7,color:"#999",fontSize:12}}>Solo "nome" è obbligatorio.</p>
+                  </div>
+                  <div style={S.field}>
+                    <label style={S.label}>Carica file .csv</label>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <input type="file" accept=".csv,text/csv" ref={csvRef} style={{display:"none"}} onChange={handleCsvFile}/>
+                      <button className="btn-sec" onClick={()=>csvRef.current.click()}>📂 Scegli file</button>
+                      <span style={{color:"#bbb",fontSize:12}}>o incolla sotto</span>
+                    </div>
+                  </div>
+                  <div style={S.field}>
+                    <label style={S.label}>Testo CSV</label>
+                    <textarea className="inp" style={{fontFamily:"monospace",fontSize:11}} rows={6}
+                      value={csvText} onChange={e=>{setCsvText(e.target.value);setCsvPreview([]);}}
+                      placeholder={"nome,categoria,calorie,proteine\nPasta al pesto,Primo,520,18"}/>
+                  </div>
+                  <button className="btn-sec" onClick={parsePreview}>Anteprima</button>
+                  {csvPreview.length>0 && (
+                    <div style={{marginTop:16}}>
+                      <p style={{fontWeight:600,color:"#7c5cbf",marginBottom:8,fontSize:13}}>✓ {csvPreview.length} ricette trovate</p>
+                      <div style={S.previewList}>
+                        {csvPreview.map((r,i)=>(
+                          <div key={i} style={S.previewItem}>
+                            <span style={{fontWeight:600}}>{r.nome}</span>
+                            <span style={{color:"#999",marginLeft:7,fontSize:12}}>{r.categoria}</span>
+                            {r.calorie && <span style={{color:"#bbb",marginLeft:7,fontSize:12}}>{r.calorie} kcal</span>}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{...S.formActions, marginTop:14}}>
+                        <button className="btn-primary" onClick={importCSV}>Importa {csvPreview.length} ricette</button>
+                        <button className="btn-sec" onClick={()=>setCsvPreview([])}>Annulla</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+
+    // Service Worker registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(()=>{});
+      });
+    }
+  </script>
+</body>
+</html>
