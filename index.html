@@ -597,11 +597,43 @@
           setCloudBusy(true);
           setSyncStatus("syncing");
           console.log("🔍 DEBUG: Pushing", payload.length, "recipes to cloud");
-          const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
+          const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "user_id,client_id" });
           if (error) {
             console.error("❌ DEBUG: Push error:", error);
+            
+            // Handle specific constraint violations
+            if (error.code === "42P10") {
+              console.error("❌ DEBUG: Unique constraint violation - regenerating client_id");
+              // Try again with new client_id for conflicting recipes
+              const conflictingRecipes = payload.filter(p => 
+                error.details?.some(detail => detail.includes(p.client_id))
+              );
+              
+              if (conflictingRecipes.length > 0) {
+                console.log("🔧 DEBUG: Regenerating client_id for", conflictingRecipes.length, "conflicting recipes");
+                const newPayload = conflictingRecipes.map(p => ({
+                  ...p,
+                  client_id: randomId(), // Generate new unique ID
+                  updated_at: new Date().toISOString()
+                }));
+                
+                try {
+                  const retryResult = await supabase.from("recipes").upsert(newPayload, { onConflict: "client_id" });
+                  if (!retryResult.error) {
+                    console.log("✅ DEBUG: Conflict resolved with new client_id");
+                    setLastSyncTime(new Date());
+                    setSyncStatus("success");
+                    showToast("Ricetta salvata (conflitto risolto) ✓");
+                    return;
+                  }
+                } catch (retryError) {
+                  console.error("❌ DEBUG: Retry failed:", retryError);
+                }
+              }
+            }
+            
             setSyncStatus("error");
-            showToast("Upload cloud fallito", "err");
+            showToast("Errore sincronizzazione cloud", "err");
           } else {
             setLastSyncTime(new Date());
             setSyncStatus("success");
