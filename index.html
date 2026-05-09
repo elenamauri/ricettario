@@ -299,6 +299,10 @@
         setRecipes(updated);
         saveRecipes(updated);
         schedulePush(updated);
+        // Show immediate feedback for local changes
+        if (supabase && session?.user) {
+          showToast("Modifiche salvate localmente - sincronizzazione in corso...", "ok");
+        }
       }
 
       function showToast(msg, type="ok") {
@@ -1084,28 +1088,16 @@
                   {cloudEnabled() && (
                     session?.user ? (
                       <>
-                        <div style={{display:"flex",alignItems:"center",gap:4}}>
-                          <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">
-                            {syncStatus === "syncing" ? "⏳" : "⟲"} Scarica
-                          </button>
-                          <button className="navbtn" onClick={async ()=>{
-                            if (cloudBusy) return;
-                            setCloudBusy(true);
-                            setSyncStatus("syncing");
-                            showToast("Caricamento ricette in corso...");
-                            await pushToCloud(recipes);
-                          }} disabled={cloudBusy} title="Carica ricette sul cloud">
-                            {syncStatus === "syncing" ? "⏳" : "📤"} Carica
-                          </button>
-                          <button className="navbtn" onClick={forceSync} disabled={cloudBusy} title="Sincronizzazione completa">
-                            🔄
-                          </button>
-                          {lastSyncTime && (
-                            <span style={{fontSize:"10px",color:"#999",marginLeft:4}}>
-                              {new Date(lastSyncTime).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}
-                            </span>
-                          )}
-                        </div>
+                        {syncStatus === "syncing" && (
+                          <div style={{fontSize:"10px",color:"#7c5cbf",marginLeft:8}}>
+                            ⏳ Sincronizzazione in corso...
+                          </div>
+                        )}
+                        {lastSyncTime && (
+                          <span style={{fontSize:"10px",color:"#999",marginLeft:8}}>
+                            Ultimo sync: {new Date(lastSyncTime).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}
+                          </span>
+                        )}
                         <button className="navbtn" onClick={logout} disabled={cloudBusy} title="Logout">⇥</button>
                       </>
                     ) : (
