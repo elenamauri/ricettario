@@ -593,23 +593,6 @@
             const rr = ensureUpdatedAt(r);
             return { client_id: rr.clientId, data: rr, updated_at: rr.updatedAt, deleted: false };
           }).filter(x => x.client_id);
-          if (!payload.length) return;
-          setCloudBusy(true);
-          setSyncStatus("syncing");
-          console.log("🔍 DEBUG: Pushing", payload.length, "recipes to cloud");
-          const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
-          if (error) throw error;
-          setLastSyncTime(new Date());
-          setSyncStatus("success");
-          console.log("✅ DEBUG: Upload successful, checking redirect needs");
-          
-          // Check if we need to redirect (user was on sync page)
-          const currentPath = window.location.pathname;
-          const isOnSyncPage = currentPath.includes("/sync") || view === "sync";
-          
-          if (isOnSyncPage) {
-            console.log("🔄 DEBUG: Redirecting to home after successful sync");
-            setTimeout(() => {
               setView("home");
               // Clean URL to prevent redirect loops
               const cleanUrl = new URL("./", window.location.href).href;
