@@ -963,27 +963,25 @@
                         </div>
                       </div>
                     )}
-                    <div style={S.detailCols}>
-                      {selected.ingredienti && (
-                        <div>
-                          <h2 style={S.sectionH}>Ingredienti</h2>
-                          {selected.ingredienti.split(/[,;\n]/).filter(Boolean).map((ing,i)=>(
-                            <div key={i} style={S.ingItem}><span style={S.ingBullet}/><span>{ing.trim()}</span></div>
-                          ))}
-                        </div>
-                      )}
-                      {selected.procedimento && (
-                        <div>
-                          <h2 style={S.sectionH}>Procedimento</h2>
-                          {selected.procedimento.split(/\n/).filter(s=>s.trim()).map((step,i)=>(
-                            <div key={i} style={S.stepItem}>
-                              <div style={S.stepNum}>{i+1}</div>
-                              <p style={S.stepText}>{step.trim()}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    {selected.ingredienti && (
+                      <div style={{marginBottom:18}}>
+                        <h2 style={S.sectionH}>Ingredienti</h2>
+                        {selected.ingredienti.split(/[,;\n]/).filter(Boolean).map((ing,i)=>(
+                          <div key={i} style={S.ingItem}><span style={S.ingBullet}/><span>{ing.trim()}</span></div>
+                        ))}
+                      </div>
+                    )}
+                    {selected.procedimento && (
+                      <div>
+                        <h2 style={S.sectionH}>Procedimento</h2>
+                        {selected.procedimento.split(/\n/).filter(s=>s.trim()).map((step,i)=>(
+                          <div key={i} style={S.stepItem}>
+                            <div style={S.stepNum}>{i+1}</div>
+                            <p style={S.stepText}>{step.trim()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {/* LOG SECTION */}
                     <div style={S.logSection}>
                       <h2 style={S.sectionH}>Note & Aggiornamenti</h2>
@@ -1000,17 +998,17 @@
                           <button onClick={()=>deleteLog(log.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#ddd",fontSize:14,padding:"0 2px",flexShrink:0}} title="Elimina nota">✕</button>
                         </div>
                       ))}
-                      <div style={S.logInputRow}>
+                      <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:14}}>
                         <textarea
                           className="inp"
                           rows={2}
-                          style={{flex:1,fontSize:14}}
+                          style={{width:"100%",fontSize:14}}
                           placeholder="es. Meglio con farina 00, cottura 2 min in meno…"
                           value={newLog}
                           onChange={e=>setNewLog(e.target.value)}
                           onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addLog();}}}
                         />
-                        <button className="btn-primary" style={{alignSelf:"flex-end",whiteSpace:"nowrap"}} onClick={addLog}>+ Aggiungi</button>
+                        <button className="btn-primary" style={{alignSelf:"flex-start"}} onClick={addLog}>+ Aggiungi nota</button>
                       </div>
                     </div>
                     <div style={S.detailActions}>
