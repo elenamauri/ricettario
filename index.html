@@ -602,18 +602,23 @@
         setView("detail"); showToast("Ricetta aggiornata ✓");
       }
 
-      function deleteRecipe(id) {
+      async function deleteRecipe(id) {
         const now = new Date().toISOString();
         const deleted = recipes.find(r=>r.id===id);
         if (supabase && session?.user && deleted?.clientId) {
           // Soft delete in cloud to avoid reappearing after pull
-          supabase.from("recipes").upsert([{ client_id: deleted.clientId, data: deleted, updated_at: now, deleted: true }], { onConflict: "client_id" }).catch(()=>{});
+          try {
+            await supabase.from("recipes").upsert([{ client_id: deleted.clientId, data: deleted, updated_at: now, deleted: true }], { onConflict: "client_id" });
+          } catch (e) {
+            console.error("Cloud delete failed:", e);
+            showToast("Errore sincronizzazione cloud", "err");
+          }
         }
         save(recipes.filter(r=>r.id!==id));
         setDeleteConfirm(null); setView("home"); showToast("Ricetta eliminata");
       }
 
-      function deleteSelectedRecipes() {
+      async function deleteSelectedRecipes() {
         const ids = Array.from(selectedIds);
         if (!ids.length) return;
         const now = new Date().toISOString();
@@ -624,7 +629,12 @@
             .filter(r => r?.clientId)
             .map(r => ({ client_id: r.clientId, data: r, updated_at: now, deleted: true }));
           if (payload.length) {
-            supabase.from("recipes").upsert(payload, { onConflict: "client_id" }).catch(()=>{});
+            try {
+              await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
+            } catch (e) {
+              console.error("Cloud bulk delete failed:", e);
+              showToast("Errore sincronizzazione cloud", "err");
+            }
           }
         }
 
@@ -888,7 +898,7 @@
                 <p style={S.modalTitle}>Eliminare questa ricetta?</p>
                 <p style={S.modalSub}>L'azione non può essere annullata.</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-                  <button className="btn-danger" onClick={()=>deleteRecipe(deleteConfirm)}>Elimina</button>
+                  <button className="btn-danger" onClick={async ()=>await deleteRecipe(deleteConfirm)}>Elimina</button>
                   <button className="btn-sec" onClick={()=>setDeleteConfirm(null)}>Annulla</button>
                 </div>
               </div>
@@ -902,7 +912,7 @@
                 <p style={S.modalTitle}>Eliminare {selectedIds.size} {selectedIds.size===1?"ricetta":"ricette"}?</p>
                 <p style={S.modalSub}>L'azione non può essere annullata.</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-                  <button className="btn-danger" onClick={deleteSelectedRecipes}>Elimina</button>
+                  <button className="btn-danger" onClick={async ()=>await deleteSelectedRecipes()}>Elimina</button>
                   <button className="btn-sec" onClick={()=>setBulkDeleteOpen(false)}>Annulla</button>
                 </div>
               </div>
