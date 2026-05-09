@@ -193,6 +193,7 @@
     }
 
     function emptyForm() {
+      setCustomCategory("");
       return { nome:"", categoria:"Primo", calorie:"", proteine:"", carboidrati:"", grassi:"",
         ingredienti:"", procedimento:"", foto:"", tempoPrep:"", porzioni:"" };
     }
@@ -268,6 +269,7 @@
       const [cloudBusy, setCloudBusy] = useState(false);
       const [multiEdit, setMultiEdit] = useState(false);
       const [selectedIds, setSelectedIds] = useState(() => new Set());
+      const [customCategory, setCustomCategory] = useState("");
       const syncTimer = useRef(null);
       const fileRef = useRef();
       const csvRef = useRef();
@@ -584,17 +586,21 @@
 
       function addRecipe() {
         if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
+        if (form.categoria === "Altro" && !customCategory.trim()) { showToast("Specifica la categoria personalizzata","err"); return; }
         const now = new Date().toISOString();
-        const created = {...form, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
+        const finalCategory = form.categoria === "Altro" ? customCategory.trim() : form.categoria;
+        const created = {...form, categoria: finalCategory, id:Date.now(), clientId: randomId(), createdAt: now, updatedAt: now};
         save([...recipes, created]);
         setView("home"); setForm(emptyForm()); showToast("Ricetta salvata ✓");
       }
 
       function updateRecipe() {
         if (!form.nome.trim()) { showToast("Inserisci il nome","err"); return; }
+        if (form.categoria === "Altro" && !customCategory.trim()) { showToast("Specifica la categoria personalizzata","err"); return; }
         const now = new Date().toISOString();
+        const finalCategory = form.categoria === "Altro" ? customCategory.trim() : form.categoria;
         const updated = recipes.map(r => r.id===selected.id
-          ? {...form, id:r.id, clientId:r.clientId, createdAt:r.createdAt, updatedAt: now}
+          ? {...form, categoria: finalCategory, id:r.id, clientId:r.clientId, createdAt:r.createdAt, updatedAt: now}
           : r
         );
         save(updated);
@@ -922,24 +928,28 @@
           {/* NAVBAR */}
           <div style={S.navbarWrap}>
             <div style={S.navbar} className="navbar-inner">
-              <div style={S.navLogo} onClick={()=>setView("home")}>
-                <span style={S.logoMark}>✦</span>
-                <span style={S.logoLabel}>Ricettario</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}>
+                <div style={S.navLogo} onClick={()=>setView("home")}>
+                  <span style={S.logoMark}>✦</span>
+                  <span style={S.logoLabel}>Ricettario</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {cloudEnabled() && (
+                    session?.user ? (
+                      <>
+                        <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">⟲ Sync</button>
+                        <button className="navbtn" onClick={logout} disabled={cloudBusy} title="Logout">⇥</button>
+                      </>
+                    ) : (
+                      <button className="navbtn" onClick={()=>setAuthOpen(true)} title="Accedi per sincronizzare">☁︎ Accedi</button>
+                    )
+                  )}
+                </div>
               </div>
               <nav style={S.navLinks} className="nav-scroll">
                 <button className={`navbtn${view==="home"?" navbtn-active":""}`} onClick={()=>setView("home")}>📖 Ricette</button>
                 <button className={`navbtn${view==="add"?" navbtn-active":""}`} onClick={()=>{setForm(emptyForm());setView("add");}}>＋ Nuova</button>
                 <button className={`navbtn${view==="import"?" navbtn-active":""}`} onClick={()=>{setCsvText("");setCsvPreview([]);setView("import");}}>↑ CSV</button>
-                {cloudEnabled() && (
-                  session?.user ? (
-                    <>
-                      <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">⟲ Sync</button>
-                      <button className="navbtn" onClick={logout} disabled={cloudBusy} title="Logout">⇥ Esci</button>
-                    </>
-                  ) : (
-                    <button className="navbtn" onClick={()=>setAuthOpen(true)} title="Accedi per sincronizzare">☁︎ Accedi</button>
-                  )
-                )}
               </nav>
             </div>
           </div>
@@ -1124,7 +1134,12 @@
                       </div>
                     </div>
                     <div style={S.detailActions}>
-                      <button className="btn-primary" onClick={()=>{setForm({...selected});setView("edit");}}>Modifica</button>
+                      <button className="btn-primary" onClick={()=>{
+                          const isCustomCategory = !CATEGORIE.includes(selected.categoria);
+                          setForm({...selected, categoria: isCustomCategory ? "Altro" : selected.categoria});
+                          setCustomCategory(isCustomCategory ? selected.categoria : "");
+                          setView("edit");
+                        }}>Modifica</button>
                       <button className="btn-danger" onClick={()=>setDeleteConfirm(selected.id)}>Elimina</button>
                     </div>
                   </div>
@@ -1148,6 +1163,15 @@
                       <select className="inp" value={form.categoria} onChange={e=>f("categoria",e.target.value)}>
                         {CATEGORIE.map(c=><option key={c}>{c}</option>)}
                       </select>
+                      {form.categoria === "Altro" && (
+                        <input 
+                          className="inp" 
+                          style={{marginTop: 8}}
+                          placeholder="Specifica categoria personalizzata..."
+                          value={customCategory}
+                          onChange={e=>setCustomCategory(e.target.value)}
+                        />
+                      )}
                     </div>
                   </div>
                   <div style={S.row2} className="row2-stack">
