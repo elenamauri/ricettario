@@ -1065,9 +1065,18 @@
                       <>
                         <div style={{display:"flex",alignItems:"center",gap:4}}>
                           <button className="navbtn" onClick={pullFromCloud} disabled={cloudBusy} title="Scarica aggiornamenti">
-                            {syncStatus === "syncing" ? "⏳" : "⟲"} Sync
+                            {syncStatus === "syncing" ? "⏳" : "⟲"} Scarica
                           </button>
-                          <button className="navbtn" onClick={forceSync} disabled={cloudBusy} title="Forza sincronizzazione completa">
+                          <button className="navbtn" onClick={async ()=>{
+                            if (cloudBusy) return;
+                            setCloudBusy(true);
+                            setSyncStatus("syncing");
+                            showToast("Caricamento ricette in corso...");
+                            await pushToCloud(recipes);
+                          }} disabled={cloudBusy} title="Carica ricette sul cloud">
+                            {syncStatus === "syncing" ? "⏳" : "📤"} Carica
+                          </button>
+                          <button className="navbtn" onClick={forceSync} disabled={cloudBusy} title="Sincronizzazione completa">
                             🔄
                           </button>
                           {lastSyncTime && (
