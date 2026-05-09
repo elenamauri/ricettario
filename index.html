@@ -593,13 +593,20 @@
             const rr = ensureUpdatedAt(r);
             return { client_id: rr.clientId, data: rr, updated_at: rr.updatedAt, deleted: false };
           }).filter(x => x.client_id);
-              setView("home");
-              // Clean URL to prevent redirect loops
-              const cleanUrl = new URL("./", window.location.href).href;
-              history.replaceState({}, "", cleanUrl);
-            }, 1000);
+          if (!payload.length) return;
+          setCloudBusy(true);
+          setSyncStatus("syncing");
+          console.log("🔍 DEBUG: Pushing", payload.length, "recipes to cloud");
+          const { error } = await supabase.from("recipes").upsert(payload, { onConflict: "client_id" });
+          if (error) {
+            console.error("❌ DEBUG: Push error:", error);
+            setSyncStatus("error");
+            showToast("Upload cloud fallito", "err");
+          } else {
+            setLastSyncTime(new Date());
+            setSyncStatus("success");
+            console.log("✅ DEBUG: Push successful:", payload.length, "recipes uploaded");
           }
-          
         } catch (e) {
           console.error("❌ DEBUG: Push error:", e);
           setSyncStatus("error");
